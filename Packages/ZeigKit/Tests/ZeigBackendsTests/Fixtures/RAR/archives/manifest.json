@@ -1,0 +1,108 @@
+{
+  "archives": [
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-best.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": null
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-encrypted-names.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": "zeig-fixture"
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-normal.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": null
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-password.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": "zeig-fixture"
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-recovery.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": null
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-solid.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": null
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-store.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": null
+    },
+    {
+      "emptyFolders": [
+        "empty folder"
+      ],
+      "file": "rar5-volumes.part1.rar",
+      "files": {
+        "hello.txt": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+        "naïve ✓.txt": "ebc45fabefbabdd06424b3c476b11e93fec784069ff10844e7383d59f491f8cb",
+        "sub/deeper/random.bin": "2035929f7df5cfb8347721577b705fd4a98fecf9144ede75e763de8702a591bf",
+        "sub/numbers.txt": "f6351f5ead9a700e34275480b3856ea738122a7c57bdeb744a631251c069587a"
+      },
+      "password": null
+    }
+  ]
+}

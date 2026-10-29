@@ -1,0 +1,122 @@
+# XcodeGen spec. The .xcodeproj is generated from this file and not checked in:
+#   xcodegen generate
+# See README.md → "Getting started".
+
+name: Zeig
+
+options:
+  bundleIdPrefix: top.kitsune
+  developmentLanguage: en
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: MBBPM3967F
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    # The native libraries (Native/scripts) are built for Apple-silicon simulators only.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+
+packages:
+  ZeigKit:
+    path: Packages/ZeigKit
+
+targets:
+  Zeig:
+    type: application
+    supportedDestinations: [iOS]
+    sources:
+      - path: App
+        excludes:
+          - README.md
+    dependencies:
+      - package: ZeigKit
+        products:
+          - ZeigCore
+          - ZeigBackends
+          - ZeigStore
+          - ZeigDesign
+          - BrowseFeature
+          - RecentFeature
+          - SearchFeature
+          - ArchiveFeature
+          - SettingsFeature
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Zeig
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.utilities
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Both keys together put the app's Documents folder in the Files app, under
+        # On My iPhone › Zeig (with only the first, the folder stays hidden). Files other apps
+        # send are still copied into that folder (FileLibrary.adoptOpenedFile) before Zeig
+        # works on them.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # The developer console's picture-in-picture window (ConsolePictureInPicture): iOS
+        # only allows PiP for apps with this mode. Zeig plays no audio and doesn't run in the
+        # background otherwise.
+        UIBackgroundModes: [audio]
+        # "Open in Zeig" / share sheet for archives.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Archive
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.zip-archive
+              - org.7-zip.7-zip-archive
+              - com.rarlab.rar-archive
+              - public.tar-archive
+              - org.gnu.gnu-zip-archive
+              - org.gnu.gnu-zip-tar-archive
+              - public.bzip2-archive
+              - org.tukaani.xz-archive
+              - public.archive
+              - public.data
+    settings:
+      base:
+        PRODUCT_NAME: Zeig
+        PRODUCT_BUNDLE_IDENTIFIER: top.kitsune.zeig
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+
+schemes:
+  Zeig:
+    build:
+      targets:
+        Zeig: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: ZeigKit/ZeigCoreTests
+        - package: ZeigKit/ZeigStoreTests
+        - package: ZeigKit/ZeigBackendsTests
+    archive:
+      config: Release

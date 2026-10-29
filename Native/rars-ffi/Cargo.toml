@@ -1,0 +1,44 @@
+# zeig-rars: Zeig's bridge to the rars crate (RAR reading and writing in pure Rust).
+#
+# UniFFI turns the functions marked #[uniffi::export] in src/lib.rs into a Swift file plus a
+# C header, and this crate is compiled into a static library the Swift code links. See
+# Native/rars-ffi/README.md for the whole workflow.
+
+[package]
+name = "zeig-rars"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+name = "zeig_rars"
+# staticlib: what the app links. cdylib: what uniffi-bindgen reads the interface from on the
+# Mac when generating the Swift bindings.
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[[bin]]
+# The binding generator, built from the same UniFFI version as the library so the two
+# always agree. Run through Native/scripts/build-rars.sh.
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+# Pinned exactly: rars is young and its API still moves between minor versions.
+rars = "=0.12.3"
+uniffi = { version = "0.32.2", features = ["cli"] }
+thiserror = "2"
+
+[profile.release]
+# Small and fast. Panics stay as unwinding (the default): UniFFI catches a panic at the
+# boundary and Swift sees it as a thrown error instead of the app crashing, which matters for
+# an experimental backend.
+lto = true
+codegen-units = 1
+# Never strip: release builds strip debug info by default, and stripping the proc-macro
+# dylibs Cargo builds for itself makes them unloadable on macOS 27 ("mis-aligned LINKEDIT
+# string pool"). Xcode strips the app at the end anyway.
+strip = "none"
+
+[profile.release.build-override]
+strip = "none"

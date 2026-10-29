@@ -1,0 +1,6 @@
+# Options for the generated Swift (see https://mozilla.github.io/uniffi-rs/latest/swift/configuration.html).
+[bindings.swift]
+# The C part of the bindings becomes this Clang module; the generated Swift imports it.
+ffi_module_name = "ZeigRarsFFI"
+ffi_module_filename = "ZeigRarsFFI"
+module_name = "ZeigRars"

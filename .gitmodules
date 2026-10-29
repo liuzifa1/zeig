@@ -1,0 +1,20 @@
+[submodule "Native/vendor/7zip"]
+	path = Native/vendor/7zip
+	url = https://github.com/ip7z/7zip
+	shallow = true
+[submodule "Native/vendor/libarchive"]
+	path = Native/vendor/libarchive
+	url = https://github.com/libarchive/libarchive
+	shallow = true
+[submodule "Native/vendor/xz"]
+	path = Native/vendor/xz
+	url = https://github.com/tukaani-project/xz
+	shallow = true
+[submodule "Native/vendor/zstd"]
+	path = Native/vendor/zstd
+	url = https://github.com/facebook/zstd
+	shallow = true
+[submodule "Native/vendor/lz4"]
+	path = Native/vendor/lz4
+	url = https://github.com/lz4/lz4
+	shallow = true
