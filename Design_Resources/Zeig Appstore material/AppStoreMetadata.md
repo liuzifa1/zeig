@@ -2,7 +2,7 @@
 
 ## Listing Fields
 
-- **App Name:** `Zeig`
+- **App Name:** `Zeig!`
 - **Subtitle (27 / 30 chars):** `ZIP, 7z, RAR & Tar Archives`
 - **Primary Category:** `Utilities`
 - **Secondary Category:** `Productivity`
@@ -52,6 +52,11 @@ PRIVATE BY DESIGN
 Not affiliated with 7-Zip, libarchive, or RARLAB. RAR is a trademark of win.rar GmbH.
 ```
 
+## App Review Notes
+
+The notes field takes at most 4,000 characters: paste `AppReviewNotes.txt`, a condensed
+`AppStoreReview.md`.
+
 ## App Privacy (Nutrition Label)
 
 - **Data Not Collected:** Zeig does not collect, sell, share, or track any user data. No third-party SDKs, no analytics, and no network connections.
@@ -60,7 +65,15 @@ Not affiliated with 7-Zip, libarchive, or RARLAB. RAR is a trademark of win.rar 
 
 ## Screenshot Asset Inventory
 
-### iPhone 6.5" Display (`1284 × 2778`, Display P3)
+All images are opaque (App Store Connect rejects an alpha channel). Re-render with
+`swift render_screenshots.swift` from this folder.
+
+### iPhone 6.3" Display (`1206 × 2622`, Display P3) — required slot
+
+`browse-6.3.png`, `archive-6.3.png`, `create-6.3.png`, `recent-6.3.png`: the same scenes as
+below, scaled from the 6.5" layout.
+
+### iPhone 6.5" Display (`1284 × 2778`, Display P3) — optional slot
 
 | File | Scene | Headline |
 |---|---|---|

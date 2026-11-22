@@ -182,10 +182,31 @@ func loadCGImage(at url: URL) -> CGImage {
     return img
 }
 
-func savePNG(_ image: CGImage, to url: URL) throws {
+/// Draws `image` aspect-filled (centered, cropping the overflow) into an opaque canvas.
+/// App Store Connect rejects screenshots with an alpha channel, so every saved PNG goes
+/// through here, also when the size doesn't change.
+func opaqueImage(_ image: CGImage, width: Int, height: Int) -> CGImage {
+    guard let ctx = CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+        space: p3, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    ) else {
+        fatalError("Failed to create opaque CGContext \(width)x\(height)")
+    }
+    ctx.interpolationQuality = .high
+    ctx.setFillColor(p3Color(1, 1, 1))
+    ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    let scale = max(CGFloat(width) / CGFloat(image.width), CGFloat(height) / CGFloat(image.height))
+    let w = CGFloat(image.width) * scale
+    let h = CGFloat(image.height) * scale
+    ctx.draw(image, in: CGRect(x: (CGFloat(width) - w) / 2, y: (CGFloat(height) - h) / 2, width: w, height: h))
+    return ctx.makeImage()!
+}
+
+func savePNG(_ image: CGImage, to url: URL, width: Int? = nil, height: Int? = nil) throws {
     guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
         throw NSError(domain: "render", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot create destination \(url.path)"])
     }
+    let image = opaqueImage(image, width: width ?? image.width, height: height ?? image.height)
     CGImageDestinationAddImage(dest, image, nil)
     if !CGImageDestinationFinalize(dest) {
         throw NSError(domain: "render", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to finalize PNG \(url.path)"])
@@ -353,6 +374,11 @@ func renderIPhone(rawURL: URL, outURL: URL, headline: String) throws {
 
     guard let outImage = ctx.makeImage() else { fatalError("Failed to create output image") }
     try savePNG(outImage, to: outURL)
+    // App Store Connect's required iPhone size is now the 6.3" display (1206 × 2622). Its
+    // aspect ratio is within 0.5% of 6.5", so the same layout is scaled down and the few
+    // extra pixels of background at the sides are cropped.
+    let out63 = outURL.deletingPathExtension().appendingPathExtension("6.3.png")
+    try savePNG(outImage, to: URL(fileURLWithPath: out63.path.replacingOccurrences(of: ".6.3.png", with: "-6.3.png")), width: 1206, height: 2622)
 }
 
 func renderIPad(rawURL: URL, outURL: URL, headline: String) throws {

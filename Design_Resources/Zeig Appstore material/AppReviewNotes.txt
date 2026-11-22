@@ -1,0 +1,23 @@
+Zeig! is an offline, on-device archive manager. No account, sign-in, purchases, ads, analytics or network access. It requests no Location, Contacts, Camera, Microphone, Photos, Local Network or tracking permissions.
+
+HOW TO REVIEW (no credentials or sample files needed)
+1. Browse tab: tap + > New Folder or + > Import from Files… to add any files (or add them in Files under On My iPhone > Zeig).
+2. Long-press an item > Compress (or + > Select, pick items, tap Compress). Choose a format (ZIP, 7z…), level and optional password, then Create.
+3. Tap the archive to browse inside it. Tap a file to preview it in Quick Look. Long-press a file or folder to extract just that item, or tap Extract All.
+4. Inside an archive, the ⋯ menu has Test Archive, Share and Info.
+5. Recent shows day-grouped history; Search filters All Files or Archives.
+6. Optional: open any .zip/.7z/.rar/.tar.gz from Files with "Open in Zeig".
+7. Optional: Settings (gear) has Format Guide, Backends, Privacy Policy, Open Source Acknowledgements, and Experimental > Test RAR backend (off by default, shows a warning; every RAR it creates is verified with 7-Zip).
+
+INFO.PLIST CAPABILITIES
+- UIFileSharingEnabled / LSSupportsOpeningDocumentsInPlace: exposes the app's own Documents folder in Files. Files opened from other apps are copied into it.
+- ITSAppUsesNonExemptEncryption = false: archive passwords (ZIP AES-256/ZipCrypto, 7z AES-256) encrypt local files only; nothing is transmitted.
+- UIBackgroundModes: audio (Guideline 2.5.4): required by iOS for AVPictureInPictureController, used only by an opt-in developer console window. To see it: Settings > tap the version under App 7 times > Developer > Console > Picture in picture (physical device only; the Simulator reports PiP as unsupported). The app plays and records no audio and does not otherwise run in the background.
+
+TESTED ON
+iPhone 15 Pro and iPad Pro (2021); Simulator: iPhone 17 Pro Max (iOS 26.2), iPad Pro 13-inch M5 (iPadOS 26.2).
+
+TECHNOLOGY
+Everything runs locally. Open-source engines built from source: 7-Zip 26.05 (LGPL 2.1+, BSD 3-Clause parts; its unRAR code is used only to read RAR, never to create it), libarchive 3.8.10 (BSD 2-Clause) with XZ Utils, Zstandard and LZ4, and rars 0.12.3 (Apache 2.0, via UniFFI) used only when the user enables experimental RAR creation. Licenses are listed in-app. Apple APIs: SwiftUI, QuickLook, QuickLookThumbnailing, UniformTypeIdentifiers, fileImporter/fileMover, AVKit.
+
+No regional differences. No regulated or third-party media content. Not affiliated with 7-Zip, libarchive or RARLAB; RAR is a trademark of win.rar GmbH.
