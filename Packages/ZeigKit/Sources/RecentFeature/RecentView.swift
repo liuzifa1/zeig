@@ -8,18 +8,20 @@ import ZeigStore
 
 /// The Recent tab: files Zeig opened, created, extracted or imported, newest first, grouped
 /// by day. Everything listed lives in the app's folder, so it always reopens.
+///
+/// Selecting works as in Browse (two-finger drag, or + → Select): the same header and toolbar,
+/// through a `FolderModel` that shows these items. The toolbar acts on the files themselves;
+/// its ⋯ menu adds Remove from Recent, which only takes them off the list.
 public struct RecentView: View {
     @Environment(RecentStore.self) private var recent
     @Environment(FileLibrary.self) private var library
     @Environment(\.showSettings) private var showSettings
     @Environment(\.showConsole) private var showConsole
     @Environment(AppSettings.self) private var settings
-    @State private var previewURL: URL?
+    @State private var model = FolderModel(folder: nil)
     @State private var isImporting = false
     @State private var confirmingClear = false
     @State private var importError: String?
-    @State private var selection: Set<String> = []
-    @State private var pushed: LibraryRoute?
     @Environment(\.fontTheme) private var fonts
 
     public init() {}
@@ -40,13 +42,14 @@ public struct RecentView: View {
         // Read so the list refreshes after files change (renames, deletes elsewhere).
         let _ = library.changeCount
         let rows = rows
+        @Bindable var model = model
         NavigationStack {
-            List(selection: $selection) {
+            List(selection: $model.selection) {
                 ForEach(Self.sections(rows.map(\.entry.date)), id: \.title) { section in
                     Section {
                         ForEach(rows.filter { section.contains($0.entry.date) }) { row in
                             FileRow(item: row.item, detail: detail(row))
-                                .tag(row.id)
+                                .tag(row.item.id)
                                 .swipeActions {
                                     // Removes from the list only, right away: no confirmation, so the
                                     // destructive role's instant row removal matches the data.
@@ -68,24 +71,28 @@ public struct RecentView: View {
             .contentMargins(.top, 0, for: .scrollContent)
             .environment(\.defaultMinListHeaderHeight, 24)
             .contextMenu(forSelectionType: String.self) { ids in
-                if let row = rows.first(where: { ids.contains($0.id) }) {
-                    Button("Open", systemImage: "arrow.up.forward") { open(row.item) }
+                let selected = rows.filter { ids.contains($0.id) }
+                if let row = selected.first, selected.count == 1 {
+                    Button("Open", systemImage: "arrow.up.forward") { model.open(row.item) }
                     ShareLink(item: row.item.url)
                     Divider()
                     Button("Remove from Recent", systemImage: "minus.circle", role: .destructive) {
                         recent.remove(row.entry.relativePath)
                     }
+                } else if !selected.isEmpty {
+                    ShareLink(items: selected.map(\.item.url)) { Label("Share", systemImage: "square.and.arrow.up") }
+                    Divider()
+                    Button("Remove from Recent", systemImage: "minus.circle", role: .destructive) {
+                        for row in selected { recent.remove(row.entry.relativePath) }
+                        model.isSelecting = false
+                    }
                 }
             } primaryAction: { ids in
-                selection = []
-                if let row = rows.first(where: { ids.contains($0.id) }) { open(row.item) }
+                guard !model.isSelecting else { return }
+                model.selection = []
+                if let row = rows.first(where: { ids.contains($0.id) }) { model.open(row.item) }
             }
-            .navigationDestination(item: $pushed) { route in
-                switch route {
-                case .folder(let url): FolderView(folder: url)
-                case .archive(let url): ArchiveView(url: url)
-                }
-            }
+            .fileActions(model: model)
             .overlay {
                 if rows.isEmpty {
                     ContentUnavailableView {
@@ -96,32 +103,37 @@ public struct RecentView: View {
                 }
             }
             .pageHeader {
-                PageHeader {
-                    Text("Recent").font(fonts.font(.title)).fixedSize()
-                } subtitle: {
-                    Text(rows.count == 1 ? "1 file" : "\(rows.count) files").font(fonts.font(.subtitle, .subheadline))
-                } controls: {
-                    if settings.developerMode {
-                        Button { showConsole() } label: { PageHeaderIcon("terminal") }
-                            .pageHeaderControl(in: Circle())
-                            .accessibilityLabel("Console")
-                    }
-                    Menu {
-                        Button("Import from Files…", systemImage: "square.and.arrow.down") { isImporting = true }
-                        Divider()
-                        Button("Clear Recent", systemImage: "trash", role: .destructive) { confirmingClear = true }
-                            .disabled(recent.entries.isEmpty)
-                    } label: {
-                        PageHeaderIcon("plus")
-                    }
-                    .pageHeaderControl(in: Circle())
-                    .accessibilityLabel("Add")
-                    Button { showSettings() } label: { PageHeaderIcon("gearshape") }
+                if model.isSelecting {
+                    SelectionHeader(model: model)
+                } else {
+                    PageHeader {
+                        Text("Recent").font(fonts.font(.title)).fixedSize()
+                    } subtitle: {
+                        Text(rows.count == 1 ? "1 file" : "\(rows.count) files").font(fonts.font(.subtitle, .subheadline))
+                    } controls: {
+                        if settings.developerMode {
+                            Button { showConsole() } label: { PageHeaderIcon("terminal") }
+                                .pageHeaderControl(in: Circle())
+                                .accessibilityLabel("Console")
+                        }
+                        Menu {
+                            Button("Import from Files…", systemImage: "square.and.arrow.down") { isImporting = true }
+                            Divider()
+                            Button("Select", systemImage: "checkmark.circle") { model.isSelecting = true }
+                                .disabled(rows.isEmpty)
+                            Button("Clear Recent", systemImage: "trash", role: .destructive) { confirmingClear = true }
+                                .disabled(recent.entries.isEmpty)
+                        } label: {
+                            PageHeaderIcon("plus")
+                        }
                         .pageHeaderControl(in: Circle())
-                        .accessibilityLabel("Settings")
+                        .accessibilityLabel("Add")
+                        Button { showSettings() } label: { PageHeaderIcon("gearshape") }
+                            .pageHeaderControl(in: Circle())
+                            .accessibilityLabel("Settings")
+                    }
                 }
             }
-            .quickLookPreview($previewURL)
             .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 do {
                     for copy in try library.importFiles(try result.get()) {
@@ -141,16 +153,19 @@ public struct RecentView: View {
             } message: {
                 Text(importError ?? "")
             }
-            .onAppear { recent.prune { library.item(atRelativePath: $0) != nil } }
+            .onAppear {
+                recent.prune { library.item(atRelativePath: $0) != nil }
+                model.extraSelectionAction = .init(title: "Remove from Recent", systemImage: "minus.circle") { items in
+                    for item in items { recent.remove(item.relativePath) }
+                    model.isSelecting = false
+                }
+            }
+            .onChange(of: rows.map(\.item), initial: true) { _, items in model.show(items) }
         }
     }
 
     private func detail(_ row: Row) -> String {
         "\(row.entry.action.label) \(row.entry.date.formatted(.relative(presentation: .named)))"
-    }
-
-    private func open(_ item: FileItem) {
-        if let route = LibraryOpen.route(for: item) { pushed = route } else { previewURL = item.url }
     }
 
     /// Today, Yesterday, This Week, Earlier: only the ones with entries.

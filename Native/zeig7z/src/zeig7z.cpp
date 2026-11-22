@@ -19,6 +19,7 @@
 //   → UpdateItems(out stream, item count, callback). The update callback describes each item
 //   (GetProperty) and hands 7-Zip an input stream for it (GetStream).
 
+#include <copyfile.h>
 #include <dirent.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -525,6 +526,16 @@ static bool isSymlink(IInArchive *handler, UInt32 index)
     return handler->GetProperty(index, kpidSymLink, &prop) == S_OK && prop.vt == VT_BSTR;
 }
 
+/// The path a hard-link entry points to (tar, cpio), or empty. Such an entry usually stores
+/// no data: the contents are stored once, under the first name.
+static UString hardLinkTarget(IInArchive *handler, UInt32 index)
+{
+    NCOM::CPropVariant prop;
+    if (handler->GetProperty(index, kpidHardLink, &prop) == S_OK && prop.vt == VT_BSTR)
+        return UString(prop.bstrVal);
+    return UString();
+}
+
 static UString entryPath(const zeig7z_archive *archive, UInt32 index)
 {
     NCOM::CPropVariant prop;
@@ -739,6 +750,23 @@ Z7_COM7F_IMF(CExtractCallback::GetStream(UInt32 index, ISequentialOutStream **ou
 
     // Replace an existing file rather than writing through it (it might be a link).
     unlink(_outPath.Ptr());
+
+    // A hard link with no data of its own: copy the file it links to, extracted earlier (a
+    // copy, cloned on APFS, so the two can't change each other later). Writing its empty
+    // data would leave an empty file. If that file wasn't extracted, nothing is written.
+    UInt64 size = 0;
+    const UString link = hardLinkTarget(handler, index);
+    if (!link.IsEmpty() && (!uint64Property(handler, index, kpidSize, size) || size == 0))
+    {
+        const UString linked = sanitizedRelativePath(link);
+        if (!linked.IsEmpty())
+        {
+            const FString source = destination + unicodeToFString(linked);
+            copyfile(source.Ptr(), _outPath.Ptr(), NULL, COPYFILE_ALL | COPYFILE_CLONE);
+        }
+        return S_OK;  // the (empty) data is skipped
+    }
+
     _outSpec = new COutFileStream;
     CMyComPtr<ISequentialOutStream> stream(_outSpec);
     if (!_outSpec->Create_ALWAYS(_outPath))

@@ -303,7 +303,8 @@ fn run_extraction(
         .collect::<rars::Result<Vec<_>>>()?;
 
     let total: u64 = rars::volume_members(&volumes)
-        .map(|members| members.iter().map(|m| m.meta.unpacked_size).sum())
+        // Saturating: the sizes are whatever the headers claim, and a plain sum can overflow.
+        .map(|members| members.iter().fold(0u64, |total, m| total.saturating_add(m.meta.unpacked_size)))
         .unwrap_or(0);
     let counter = Arc::new(ByteCounter { done: Default::default(), total, progress, cancellation: cancellation.child() });
 
@@ -425,6 +426,9 @@ impl rars::WriteProgress for ProgressRelay {
 /// Writes a volume set as `name.partN.rar`, numbered with as many digits as the count needs
 /// (part1…part9, or part01…part12), like WinRAR. Volumes are written to temporary names first
 /// and renamed at the end, so a failure leaves nothing behind.
+///
+/// Never replaces an existing volume: overwriting part of an older set with the same name would
+/// destroy it, and its leftover higher-numbered parts would then be read as part of the new one.
 fn write_volumes(
     builder: &Builder,
     destination: &Path,
@@ -432,18 +436,26 @@ fn write_volumes(
 ) -> Result<Vec<String>, RarError> {
     struct Sink<'a> {
         destination: &'a Path,
+        /// Unique to this write, so two writes in one folder can't share temporary files.
+        token: String,
         temporaries: Vec<PathBuf>,
     }
     impl rars::rar50::VolumeSink for Sink<'_> {
         fn start_volume(&mut self, index: u64) -> rars::Result<Box<dyn Write + Send>> {
-            let temporary = self.destination.with_file_name(format!(".zeig-volume-{index}.tmp"));
-            let file = fs::File::create(&temporary)?;
+            let temporary = self.destination.with_file_name(format!(".zeig-volume-{}-{index}.tmp", self.token));
+            // create_new: never reuse or follow something already at that name.
+            let file = fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
             self.temporaries.push(temporary);
             Ok(Box::new(file))
         }
     }
 
-    let mut sink = Sink { destination, temporaries: Vec::new() };
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let token = format!("{}-{nanos}", std::process::id());
+    let mut sink = Sink { destination, token, temporaries: Vec::new() };
     let resources = rars::WriterResources::default()
         .with_temp_dir(destination.parent().unwrap_or(Path::new(".")));
     let result = builder.write_volumes_to(&mut sink, &resources, progress);
@@ -460,11 +472,20 @@ fn write_volumes(
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "archive".into());
+    let finals: Vec<PathBuf> = (1..=count)
+        .map(|number| destination.with_file_name(format!("{stem}.part{number:0width$}.rar")))
+        .collect();
+    if let Some(taken) = finals.iter().find(|path| path.exists()) {
+        for temporary in &sink.temporaries {
+            let _ = fs::remove_file(temporary);
+        }
+        return Err(RarError::Io {
+            message: format!("{} already exists", taken.file_name().unwrap_or_default().to_string_lossy()),
+        });
+    }
     let mut written = Vec::new();
-    for (index, temporary) in sink.temporaries.iter().enumerate() {
-        let name = format!("{stem}.part{:0width$}.rar", index + 1);
-        let final_path = destination.with_file_name(name);
-        fs::rename(temporary, &final_path)?;
+    for (temporary, final_path) in sink.temporaries.iter().zip(&finals) {
+        fs::rename(temporary, final_path)?;
         written.push(final_path.to_string_lossy().into_owned());
     }
     Ok(written)
@@ -490,6 +511,49 @@ mod tests {
         let found = volume_paths(&dir.join("set.part01.rar"));
         let names: Vec<_> = found.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
         assert_eq!(names, ["set.part01.rar", "set.part02.rar", "set.part03.rar"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A second split archive with the same name used to rename its parts over the first set's,
+    /// and leave that set's extra parts to be read as part of the new one.
+    #[test]
+    fn split_archives_never_replace_existing_parts() {
+        let dir = std::env::temp_dir().join(format!("zeig-rars-split-{}", std::process::id()));
+        let source = dir.join("input");
+        fs::create_dir_all(&source).unwrap();
+        // Incompressible, so it really needs several volumes.
+        let mut state: u64 = 42;
+        let noise: Vec<u8> = (0..400_000)
+            .map(|_| {
+                state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                (state >> 56) as u8
+            })
+            .collect();
+        fs::write(source.join("noise.bin"), &noise).unwrap();
+        let options = || RarPackOptions {
+            version: RarVersion::Rar50,
+            level: Some(0),
+            solid: false,
+            password: None,
+            encrypt_headers: false,
+            recovery_percent: None,
+            volume_size: Some(150_000),
+            comment: None,
+        };
+        let archive = dir.join("set.rar").to_string_lossy().into_owned();
+        let first = create_archive(archive.clone(), vec![source.to_string_lossy().into()], options(), None).unwrap();
+        assert!(first.len() > 1, "expected a split set, got {first:?}");
+        let before: Vec<Vec<u8>> = first.iter().map(|p| fs::read(p).unwrap()).collect();
+
+        let second = create_archive(archive, vec![source.to_string_lossy().into()], options(), None);
+        assert!(matches!(second, Err(RarError::Io { .. })), "expected a refusal, got {second:?}");
+        let after: Vec<Vec<u8>> = first.iter().map(|p| fs::read(p).unwrap()).collect();
+        assert!(before == after, "the first set's parts changed");
+        let leftovers: Vec<_> = fs::read_dir(&dir).unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "temporary volumes left behind");
         fs::remove_dir_all(&dir).unwrap();
     }
 

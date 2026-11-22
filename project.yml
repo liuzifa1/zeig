@@ -10,6 +10,13 @@ options:
   createIntermediateGroups: true
   deploymentTarget:
     iOS: "18.0"
+  fileTypes:
+    # Icon Composer icons (App/App.icon). XcodeGen doesn't know the type and would add the
+    # folder's PNGs as loose resources; as one file, the asset compiler turns it into the
+    # app icon (Liquid Glass on 26+, flattened images for earlier versions).
+    icon:
+      file: true
+      buildPhase: resources
 
 settings:
   base:
@@ -98,7 +105,8 @@ targets:
       base:
         PRODUCT_NAME: Zeig
         PRODUCT_BUNDLE_IDENTIFIER: top.kitsune.zeig
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # App/App.icon, made in Icon Composer.
+        ASSETCATALOG_COMPILER_APPICON_NAME: App
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO

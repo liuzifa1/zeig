@@ -26,3 +26,10 @@ The three engines behind `ArchiveBackend`, and `ArchiveService`, the one thing t
 Add it to `ArchiveBackend` in ZeigCore, implement it in all three backends (or throw
 `.readOnlyFormat` / `.other` where an engine can't), expose it on `ArchiveService` with
 `background { … }`, and test it with real archives.
+
+## Extraction details
+
+- Every backend skips symbolic links and strips `..` and leading `/` from paths.
+- libarchive: a hard link with no data of its own gets a copy of the file it names (extracted
+  earlier), not an empty file. Pipes, sockets and device nodes are skipped. The 7-Zip bridge
+  does the same for hard links (`HardLinkTests` covers both).

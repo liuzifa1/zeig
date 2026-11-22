@@ -56,6 +56,11 @@ struct RootView: View {
                 showsConsole = true
             }
         }
+        .task(id: settings.developerMode) {
+            // Ready ahead of the tap: a controller made at the moment of the press often can't
+            // start yet.
+            if settings.developerMode { ConsolePictureInPicture.shared.prepare() }
+        }
         .onChange(of: settings.capturesNativeOutput, initial: true) { _, capture in
             if capture && settings.developerMode {
                 NativeOutputCapture.start()

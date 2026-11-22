@@ -73,12 +73,22 @@ public struct LibArchiveBackend: ArchiveBackend {
             guard wanted?.contains(index) ?? true else { return .skip }
             let item = makeEntry(entry, index: index, archive: archive, format: format)
             guard !item.isSymlink, let relative = item.sanitizedPath else { return .skip }
+            // Pipes, sockets and device nodes have no contents to extract.
+            let type = UInt32(archive_entry_filetype(entry))
+            guard !FileType.special.contains(type) else { return .skip }
             let target = destination.appendingPathComponent(relative)
             if item.isDirectory {
                 try createDirectory(target)
                 return .skip
             }
             try createDirectory(target.deletingLastPathComponent())
+            if let link = (archive_entry_hardlink_utf8(entry) ?? archive_entry_hardlink(entry)).map({ String(cString: $0) }),
+               archive_entry_size(entry) <= 0 {
+                // A hard link stores its data once, under the first name; this entry only names
+                // it again. Writing its (empty) data would leave an empty file.
+                copyLinkedFile(ArchiveEntry.sanitize(link), in: destination, to: target)
+                return .skip
+            }
             try writeData(of: reader, to: target, progress: progress, total: total)
             setAttributes(of: target, from: entry)
             return .done
@@ -152,6 +162,20 @@ public struct LibArchiveBackend: ArchiveBackend {
             isEncrypted: archive_entry_is_encrypted(entry) != 0,
             isSymlink: type == FileType.symlink
         )
+    }
+
+    /// Gives a hard link its own copy of the file it links to, which was extracted earlier (a
+    /// copy, not a link: on APFS it's a clone, and the two can't change each other later).
+    /// If that file wasn't extracted (it wasn't chosen, or it's missing), there's nothing to copy.
+    private func copyLinkedFile(_ linked: String?, in destination: URL, to target: URL) {
+        guard let linked else { return }
+        let source = destination.appendingPathComponent(linked)
+        unlink(target.path)
+        do {
+            try FileManager.default.copyItem(at: source, to: target)
+        } catch {
+            ZeigLog.warning("libarchive", "hard link \(target.lastPathComponent): the file it links to wasn't extracted")
+        }
     }
 
     private func writeData(of reader: OpaquePointer, to target: URL, progress: ArchiveProgress, total: UInt64) throws(ArchiveError) {
@@ -433,4 +457,6 @@ private enum FileType {
     static let regular: UInt32 = 0o100000
     static let directory: UInt32 = 0o040000
     static let symlink: UInt32 = 0o120000
+    /// FIFO, character device, block device, socket.
+    static let special: Set<UInt32> = [0o010000, 0o020000, 0o060000, 0o140000]
 }

@@ -78,6 +78,16 @@ import ZeigCore
         #expect(second.map(\.lastPathComponent) == ["backup copy 2.tar.gz"])
     }
 
+    @Test func commonFolderIsTheSharedParentOrTheTop() throws {
+        let library = FileLibrary(root: root)
+        let work = root.appendingPathComponent("Work")
+        let a = work.appendingPathComponent("a.txt"), b = work.appendingPathComponent("b.txt")
+        let c = root.appendingPathComponent("Other/c.txt")
+        #expect(library.commonFolder(of: [a, b]).path == work.standardizedFileURL.path)
+        #expect(library.commonFolder(of: [a, c]) == root, "a selection in Recent can span folders")
+        #expect(library.commonFolder(of: []) == root)
+    }
+
     @Test func newFolderWithItems() throws {
         let library = FileLibrary(root: root)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -136,6 +146,18 @@ import ZeigCore
         store.prune { $0 == "kept.zip" }
         store.move("kept.zip", to: "Folder/kept.zip")
         #expect(store.entries.map(\.relativePath) == ["Folder/kept.zip"])
+    }
+
+    @Test func movingAFolderCarriesWhatsInsideIt() {
+        let store = RecentStore(fileURL: nil)
+        store.record("Trips/rome.zip", .opened)
+        store.record("Trips/2026/paris.7z", .opened)
+        store.record("Tripsheet.zip", .opened)
+        store.move("Trips", to: "Holidays")
+        #expect(Set(store.entries.map(\.relativePath)) == ["Holidays/rome.zip", "Holidays/2026/paris.7z", "Tripsheet.zip"],
+                "only paths inside the folder move, not names that merely start the same")
+        store.remove("Holidays")
+        #expect(store.entries.map(\.relativePath) == ["Tripsheet.zip"])
     }
 
     @Test func persists() {

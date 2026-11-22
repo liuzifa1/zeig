@@ -84,7 +84,7 @@ public struct ConsoleView: View {
             #if os(iOS)
             if ConsolePictureInPicture.isSupported {
                 Button(
-                    ConsolePictureInPicture.shared.isActive ? "Close Picture in Picture" : "Picture in Picture",
+                    ConsolePictureInPicture.shared.state.showsOn ? "Close Picture in Picture" : "Picture in Picture",
                     systemImage: "pip"
                 ) { ConsolePictureInPicture.shared.toggle() }
             }

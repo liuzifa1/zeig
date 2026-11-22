@@ -4,8 +4,9 @@ import ZeigCore
 import ZeigDesign
 import ZeigStore
 
-/// The create sheet: name, format, level, password, and the format's advanced settings, each
-/// with a one-line explanation and an ⓘ for the full one.
+/// The create sheet: name, format, level and password, with the format's advanced settings on
+/// a page of their own (`PackAdvancedSettings`). Each has a one-line explanation and an ⓘ for
+/// the full one.
 struct PackSheet: View {
     let sources: PackSources
     /// Called after the archive was written (the folder leaves selection mode).
@@ -22,12 +23,10 @@ struct PackSheet: View {
     @State private var password = ""
     @State private var showsPassword = false
     @State private var advanced: [String: String] = [:]
-    @State private var showsAdvanced = false
     @State private var guide: GuideTopic?
     @State private var actions = ArchiveActions()
     @State private var verificationFailure: String?
     @State private var loaded = false
-    @Environment(\.fontTheme) private var fonts
 
     private var router: BackendRouter { BackendRouter(settings: settings.routing) }
 
@@ -57,12 +56,7 @@ struct PackSheet: View {
                         .disabled(!canCreate)
                 }
             }
-            .sheet(item: $guide) { topic in
-                NavigationStack {
-                    GuideTopicView(topic: topic)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { guide = nil } } }
-                }
-            }
+            .guideSheet($guide)
             .alert("7-Zip couldn't read the archive back", isPresented: Binding(get: { verificationFailure != nil }, set: { if !$0 { verificationFailure = nil } })) {
                 Button("OK", role: .cancel) { finish() }
             } message: {
@@ -132,10 +126,17 @@ struct PackSheet: View {
                         SecureField("Password (optional)", text: $password)
                     }
                 }
-                .textContentType(.newPassword)
+                // No `.newPassword`: that makes iOS offer a strong password and to save it in
+                // Passwords, and the offer swallows what's typed. An archive's password isn't
+                // an account's, and Zeig says it doesn't keep it.
                 .autocorrectionDisabled()
-                Button(showsPassword ? "Hide" : "Show") { showsPassword.toggle() }
-                    .buttonStyle(.borderless)
+                Button {
+                    showsPassword.toggle()
+                } label: {
+                    Image(systemName: showsPassword ? "eye.slash" : "eye")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(showsPassword ? "Hide password" : "Show password")
             }
         } header: {
             Text("Password")
@@ -146,57 +147,16 @@ struct PackSheet: View {
 
     private var advancedSection: some View {
         Section {
-            DisclosureGroup("Advanced settings", isExpanded: $showsAdvanced) {
-                ForEach(FormatOptions.options(for: format)) { option in
-                    optionRow(option)
-                }
+            NavigationLink("Advanced settings") {
+                PackAdvancedSettings(format: format, hasPassword: !password.isEmpty, advanced: $advanced)
             }
         } footer: {
             Text("Most people never change these.")
         }
     }
 
-    @ViewBuilder
-    private func optionRow(_ option: FormatOption) -> some View {
-        let binding = Binding(get: { advanced[option.id] ?? option.defaultValue }, set: { advanced[option.id] = $0 })
-        let disabled = option.needsPassword && password.isEmpty
-        VStack(alignment: .leading, spacing: 6) {
-            Group {
-                switch option.kind {
-                case .choice(let choices):
-                    Picker(option.title, selection: binding) {
-                        ForEach(choices) { Text($0.label).tag($0.value) }
-                    }
-                case .toggle:
-                    Toggle(option.title, isOn: Binding(get: { binding.wrappedValue == "on" }, set: { binding.wrappedValue = $0 ? "on" : "off" }))
-                case .text(let placeholder):
-                    LabeledContent(option.title) {
-                        TextField(placeholder, text: binding)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
-            }
-            // Only the control: the explanation and its ⓘ stay usable.
-            .disabled(disabled)
-            explanation(disabled ? "Needs a password. " + option.summary : option.summary, topic: option.guide)
-        }
-    }
-
-    /// A short explanation with an ⓘ that opens the guide topic.
     private func explanation(_ text: String, topic: GuideTopic.ID, warning: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(text)
-                .font(fonts.font(.guide))
-                .foregroundStyle(warning ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-            Spacer(minLength: 4)
-            Button {
-                guide = GuideTopic.topic(topic)
-            } label: {
-                Image(systemName: "info.circle")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("More about this")
-        }
+        GuideExplanation(text: text, topic: topic, warning: warning, guide: $guide)
     }
 
     // MARK: Logic
@@ -262,5 +222,87 @@ struct PackSheet: View {
     private func finish() {
         onCreated()
         dismiss()
+    }
+}
+
+/// New Archive → Advanced settings: the options of one format.
+private struct PackAdvancedSettings: View {
+    let format: ArchiveFormat
+    let hasPassword: Bool
+    @Binding var advanced: [String: String]
+    @State private var guide: GuideTopic?
+
+    var body: some View {
+        Form {
+            ForEach(FormatOptions.options(for: format)) { option in
+                optionRow(option)
+            }
+        }
+        .navigationTitle("Advanced Settings")
+        .inlineNavigationTitle()
+        .guideSheet($guide)
+    }
+
+    @ViewBuilder
+    private func optionRow(_ option: FormatOption) -> some View {
+        let binding = Binding(get: { advanced[option.id] ?? option.defaultValue }, set: { advanced[option.id] = $0 })
+        let disabled = option.needsPassword && !hasPassword
+        VStack(alignment: .leading, spacing: 6) {
+            Group {
+                switch option.kind {
+                case .choice(let choices):
+                    Picker(option.title, selection: binding) {
+                        ForEach(choices) { Text($0.label).tag($0.value) }
+                    }
+                case .toggle:
+                    Toggle(option.title, isOn: Binding(get: { binding.wrappedValue == "on" }, set: { binding.wrappedValue = $0 ? "on" : "off" }))
+                case .text(let placeholder):
+                    LabeledContent(option.title) {
+                        TextField(placeholder, text: binding)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+            }
+            // Only the control: the explanation and its ⓘ stay usable.
+            .disabled(disabled)
+            GuideExplanation(text: disabled ? "Needs a password. " + option.summary : option.summary, topic: option.guide, guide: $guide)
+        }
+    }
+}
+
+/// A short explanation with an ⓘ that opens the guide topic.
+private struct GuideExplanation: View {
+    let text: String
+    let topic: GuideTopic.ID
+    var warning = false
+    @Binding var guide: GuideTopic?
+    @Environment(\.fontTheme) private var fonts
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(text)
+                .font(fonts.font(.guide))
+                .foregroundStyle(warning ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+            Spacer(minLength: 4)
+            Button {
+                guide = GuideTopic.topic(topic)
+            } label: {
+                Image(systemName: "info.circle")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("More about this")
+        }
+    }
+}
+
+private extension View {
+    /// Shows the guide topic an ⓘ asked for.
+    func guideSheet(_ guide: Binding<GuideTopic?>) -> some View {
+        sheet(item: guide) { topic in
+            NavigationStack {
+                GuideTopicView(topic: topic)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { guide.wrappedValue = nil } } }
+            }
+        }
     }
 }

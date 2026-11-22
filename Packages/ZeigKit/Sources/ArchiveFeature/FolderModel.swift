@@ -44,12 +44,33 @@ public final class FolderModel {
     public var isCreatingFolder = false
     public var packSources: PackSources?
     public var renaming: FileItem?
-    public var moving: [FileItem]?
+    /// What the system's move sheet is moving. Separate from `isShowingMoveSheet` because
+    /// SwiftUI turns the sheet's flag off before the completion handler runs, and the handler
+    /// still needs these to keep Recent pointing at the files.
+    public var moving: [FileItem]? {
+        didSet { isShowingMoveSheet = moving != nil }
+    }
+    public var isShowingMoveSheet = false
     public var infoItem: FileItem?
     public var previewURL: URL?
     /// A screen to push (an archive; a folder when not navigating in place).
     public var pushed: LibraryRoute?
     public let actions = ArchiveActions()
+    /// One more item for the selection toolbar's ⋯ menu (Recent's Remove from Recent).
+    public var extraSelectionAction: ExtraSelectionAction?
+
+    /// See `extraSelectionAction`.
+    public struct ExtraSelectionAction {
+        public var title: String
+        public var systemImage: String
+        public var perform: @MainActor ([FileItem]) -> Void
+
+        public init(title: String, systemImage: String, perform: @escaping @MainActor ([FileItem]) -> Void) {
+            self.title = title
+            self.systemImage = systemImage
+            self.perform = perform
+        }
+    }
 
     public init(folder: URL?, navigatesInPlace: Bool = false) {
         self.folder = folder
@@ -81,6 +102,21 @@ public final class FolderModel {
         moveTo(next)
     }
 
+    /// Tap: folders in place or pushed, archives pushed, other files in Quick Look.
+    public func open(_ item: FileItem) {
+        if item.isDirectory {
+            open(folder: item.url)
+        } else if item.isArchive {
+            pushed = .archive(item.url)
+        } else {
+            previewURL = item.url
+        }
+    }
+
+    public func open(folder: URL) {
+        if navigatesInPlace { go(to: folder) } else { pushed = .folder(folder) }
+    }
+
     private func moveTo(_ folder: URL?) {
         self.folder = folder
         isSelecting = false
@@ -108,6 +144,22 @@ public final class FolderModel {
         selection.formIntersection(rows.map(\.id))
     }
 
+    /// Shows these items instead of a folder's (Recent's list, which reuses the selection and
+    /// the file actions).
+    public func show(_ items: [FileItem]) {
+        rows = items.map { FolderRow(item: $0, depth: 0) }
+        selection.formIntersection(rows.map(\.id))
+    }
+
+    /// After a rename: folders shown expanded stay expanded under their new path.
+    public func folderMoved(from oldPath: String, to newPath: String) {
+        expanded = Set(expanded.map { path in
+            if path == oldPath { return newPath }
+            if path.hasPrefix(oldPath + "/") { return newPath + "/" + path.dropFirst(oldPath.count + 1) }
+            return path
+        })
+    }
+
     public func toggleExpanded(_ item: FileItem, library: FileLibrary) {
         if expanded.contains(item.id) { expanded.remove(item.id) } else { expanded.insert(item.id) }
         reload(library)
@@ -123,6 +175,20 @@ public final class FolderModel {
             isSelecting = false
         } catch {
             actions.alert = AlertContent(title: "Can't delete", message: error.localizedDescription)
+        }
+    }
+
+    /// New Folder with Items, then asks for the folder's name. Recent follows the files.
+    public func newFolder(containing items: [FileItem], library: FileLibrary, recent: RecentStore) {
+        do {
+            let created = try library.newFolder(containing: items.map(\.url))
+            for item in items {
+                recent.move(item.relativePath, to: library.relativePath(of: created.appendingPathComponent(item.name)))
+            }
+            isSelecting = false
+            renaming = library.item(for: created)
+        } catch {
+            actions.alert = AlertContent(title: "Can't create the folder", message: error.localizedDescription)
         }
     }
 

@@ -161,7 +161,7 @@ public struct ArchiveStatistics: Sendable, Equatable {
         }
         folderCount = folders.count
         encryptedCount = files.filter(\.isEncrypted).count
-        originalSize = files.reduce(0) { $0 + $1.size }
+        originalSize = files.reduce(0) { $0.addingSaturating($1.size) }
         self.archiveSize = archiveSize
         let dates = entries.compactMap(\.modified)
         newest = dates.max()
@@ -257,4 +257,14 @@ public protocol ArchiveBackend: Sendable {
 
     /// Writes a new archive; returns the files written (several for split archives).
     func create(_ request: PackRequest, progress: ArchiveProgress) throws(ArchiveError) -> [URL]
+}
+
+public extension UInt64 {
+    /// `self + other`, stopping at `UInt64.max` instead of trapping. For sizes that come from
+    /// archive headers: an archive can claim any size, and `+` on two huge ones would crash the
+    /// app as soon as it's opened.
+    func addingSaturating(_ other: UInt64) -> UInt64 {
+        let (sum, overflow) = addingReportingOverflow(other)
+        return overflow ? .max : sum
+    }
 }

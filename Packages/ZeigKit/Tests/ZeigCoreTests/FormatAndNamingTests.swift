@@ -71,6 +71,23 @@ import ZeigCore
         #expect(FileNaming.unique(first).lastPathComponent == "backup 3.tar.gz")
     }
 
+    /// A split RAR set has no "Archive.rar", only its parts. Picking "Archive.rar" again used
+    /// to write the new set's parts over the old ones.
+    @Test func splitSetsCountAsTaken() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for part in ["Archive.part1.rar", "Archive.part2.rar", "Archive 2.part01.rar"] {
+            FileManager.default.createFile(atPath: folder.appendingPathComponent(part).path, contents: Data())
+        }
+        #expect(FileNaming.unique(folder.appendingPathComponent("Archive.rar")).lastPathComponent == "Archive 3.rar")
+        #expect(FileNaming.unique(folder.appendingPathComponent("Archive.zip")).lastPathComponent == "Archive.zip",
+                "only parts with the same extension count")
+        FileManager.default.createFile(atPath: folder.appendingPathComponent("Report.partial.rar").path, contents: Data())
+        #expect(FileNaming.unique(folder.appendingPathComponent("Report.rar")).lastPathComponent == "Report.rar",
+                "\".partial\" isn't a part number")
+    }
+
     @Test func archiveNames() {
         let file = URL(fileURLWithPath: "/x/report.pdf")
         #expect(FileNaming.archiveName(for: [file], format: .zip) == "report.zip")

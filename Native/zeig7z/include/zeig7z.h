@@ -175,7 +175,8 @@ zeig7z_result zeig7z_entry_at(zeig7z_archive *archive, uint32_t index, zeig7z_en
  * `indices` lists the entries to extract (sorted ascending); pass NULL and 0 for all.
  * Paths are made safe first: leading '/', '.' and '..' components are dropped, so nothing
  * is written outside `destination`. Existing files with the same name are replaced.
- * Symbolic links are skipped.
+ * Symbolic links are skipped. A hard link (tar, cpio) gets a copy of the file it links to, when
+ * that file is extracted too; without it, nothing is written for the link.
  *
  * `password` (may be NULL) overrides the one given to zeig7z_open.
  */

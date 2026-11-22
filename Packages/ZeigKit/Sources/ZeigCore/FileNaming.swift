@@ -4,16 +4,33 @@ import Foundation
 public enum FileNaming {
     /// `url`, or "name 2.ext", "name 3.ext", … next to it, whichever doesn't exist yet.
     /// Compound extensions stay together: "backup.tar.gz" → "backup 2.tar.gz".
+    ///
+    /// A split set counts as taken too: "Archive.rar" is taken while "Archive.part1.rar" exists,
+    /// because a new split set of that name would write the same part names.
     public static func unique(_ url: URL, fileManager: FileManager = .default) -> URL {
-        guard fileManager.fileExists(atPath: url.path) else { return url }
         let folder = url.deletingLastPathComponent()
         let (stem, ext) = split(url.lastPathComponent)
+        let names = Set(((try? fileManager.contentsOfDirectory(atPath: folder.path)) ?? []).map { $0.lowercased() })
+        func isTaken(_ candidate: URL, stem: String) -> Bool {
+            fileManager.fileExists(atPath: candidate.path) || (!ext.isEmpty && names.contains { isPart($0, of: stem, ext: ext) })
+        }
+        guard isTaken(url, stem: stem) else { return url }
         var number = 2
         while true {
-            let candidate = folder.appendingPathComponent("\(stem) \(number)" + (ext.isEmpty ? "" : ".\(ext)"))
-            if !fileManager.fileExists(atPath: candidate.path) { return candidate }
+            let numbered = "\(stem) \(number)"
+            let candidate = folder.appendingPathComponent(numbered + (ext.isEmpty ? "" : ".\(ext)"))
+            if !isTaken(candidate, stem: numbered) { return candidate }
             number += 1
         }
+    }
+
+    /// "archive.part2.rar" is a part of ("Archive", "rar"). `name` is lowercased.
+    private static func isPart(_ name: String, of stem: String, ext: String) -> Bool {
+        let prefix = (stem + ".part").lowercased()
+        let suffix = ("." + ext).lowercased()
+        guard name.hasPrefix(prefix), name.hasSuffix(suffix), name.count > prefix.count + suffix.count else { return false }
+        return name.dropFirst(prefix.count).dropLast(suffix.count).allSatisfy(\.isASCII) &&
+            name.dropFirst(prefix.count).dropLast(suffix.count).allSatisfy(\.isNumber)
     }
 
     /// "photos.tar.gz" → ("photos", "tar.gz"); "notes" → ("notes", ""). Uses the longest

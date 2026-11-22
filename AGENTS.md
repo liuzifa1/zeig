@@ -33,12 +33,12 @@ CARGO_TARGET_DIR=~/Library/Caches/Zeig/native/cargo cargo test --manifest-path N
 
 | Module | Owns | May import |
 |---|---|---|
-| `ZeigCore` | `ArchiveFormat`, `FormatDetector`, `BackendRouter` + `BackendCapabilities` (the routing rule), `ArchiveBackend` protocol, `ArchiveEntry`, `ArchiveContents`/`ArchiveInfo`/`ArchiveStatistics`, `ArchiveError`, `PackRequest`, `FormatOptions` (advanced settings), `GuideTopic` (explanations), `ArchiveTree`, `FileNaming`, `ZeigLog` (developer console log), `NativeOutputCapture` | Foundation |
+| `ZeigCore` | `ArchiveFormat`, `FormatDetector`, `BackendRouter` + `BackendCapabilities` (the routing rule), `ArchiveBackend` protocol, `ArchiveEntry`, `ArchiveContents`/`ArchiveInfo`/`ArchiveStatistics`, `ArchiveError`, `PackRequest`, `FormatOptions` (advanced settings), `GuideTopic` (explanations), `ArchiveTree`, `FileNaming`, `ZeigLog` (developer console log), `NativeOutputCapture`, `PictureInPictureState` | Foundation |
 | `ZeigBackends` | `SevenZipBackend`, `LibArchiveBackend`, `RarsBackend`, `ArchiveService` (routing, fallback, background work, rars check) | ZeigCore, CSevenZip, CLibArchive, ZeigRars |
 | `ZeigRars` | UniFFI's **generated** Swift for rars. Never edit; run `build-rars.sh`. | ZeigRarsFFI |
 | `ZeigStore` | `AppSettings`, `FileLibrary` (the app folder), `RecentStore` | ZeigCore |
 | `ZeigDesign` | `PageHeader`, glass helpers (from HNReader), `ScopeSwitcher`, `LargeTitleItem`, `FileIcon`, `FileThumbnail`, `ExperimentalBadge`, `OperationModel`/`OperationOverlay`, `FontTheme` (Font Lab roles), `ConsoleView` + `ConsolePictureInPicture` (developer console), `hidesTabBar`, `showSettings`/`showConsole` | ZeigCore |
-| `ArchiveFeature` | Screens every tab pushes: `FolderModel`/`FolderContent`/`FolderView` (Files-style list), `FileMenu`, `SelectionToolbar`/`SelectionHeader`, `FileInfoSheet`, `FilePasteboard`, `ArchiveView`, `PackSheet`, guide views, `ArchiveActions`, `LibraryRoute` | ZeigCore, ZeigBackends, ZeigStore, ZeigDesign |
+| `ArchiveFeature` | Screens every tab pushes: `FolderModel`/`FolderContent`/`FolderView` (Files-style list), `fileActions` (shared by every file list), `FileMenu`, `SelectionToolbar`/`SelectionHeader`, `FileInfoSheet`, `FilePasteboard`, `ArchiveView`, `PackSheet`, guide views, `ArchiveActions`, `LibraryRoute` | ZeigCore, ZeigBackends, ZeigStore, ZeigDesign |
 | `BrowseFeature` / `RecentFeature` / `SearchFeature` | One tab each | the above + ArchiveFeature |
 | `SettingsFeature` | Settings sheet, Backends, Developer (console, Font Lab), About / Privacy / Open Source | the above + ArchiveFeature |
 | `App/` | Entry point, tabs, "Open in Zeig" | everything |
@@ -137,7 +137,15 @@ it, and a `differences(…)` message so failures say what differs.
   shrink next to the controls.
 - The console's picture-in-picture window is video (`ConsolePictureInPicture` draws the log into
   frames). The Simulator reports PiP as unsupported, so the option is hidden there: test it on a
-  device. It needs `UIBackgroundModes: audio` in `project.yml`.
+  device, and keep the press rules in `PictureInPictureState`, where tests can reach them. It
+  needs `UIBackgroundModes: audio` in `project.yml`.
+- The app icon is `App/App.icon` (Icon Composer). XcodeGen 2.44 doesn't know `.icon` and would add
+  its PNGs as loose files, so `project.yml` declares it under `options.fileTypes` as one file.
+- Sizes in archive headers are untrusted and can be anything: sum them with
+  `addingSaturating`, never `+` (two huge ones trap and crash the app on opening).
+- `fileMover` and friends set `isPresented` to false *before* their completion handler runs. Don't
+  derive that flag from data the handler needs (`FolderModel.moving` is separate for this reason:
+  deriving it dropped moved files from Recent).
 - Hide the tab bar with `hidesTabBar(_:)` (UIKit), never `.toolbar(.hidden, for: .tabBar)`, which
   breaks the Search tab's field on 26+. `.bottomBar` toolbars don't exist on macOS, where the
   package builds for tests: keep them behind `#if os(iOS)`.

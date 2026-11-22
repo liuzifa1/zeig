@@ -69,6 +69,9 @@ public final class ArchiveActions {
 
     private func askPassword(for url: URL, wasWrong: Bool) async -> String? {
         await withCheckedContinuation { continuation in
+            // One prompt at a time: answer an older one with "cancel" rather than drop it,
+            // which would leave its operation waiting forever.
+            passwordPrompt?.answer(nil)
             passwordPrompt = PasswordPrompt(archiveName: url.lastPathComponent, wasWrong: wasWrong, continuation: continuation)
         }
     }
@@ -90,6 +93,44 @@ public final class ArchiveActions {
         _ url: URL, listing: ArchiveListing? = nil, entries: [ArchiveEntry]? = nil, password: String? = nil,
         service: ArchiveService, library: FileLibrary, recent: RecentStore
     ) async {
+        if case .extracted(let folder) = await extractOne(
+            url, listing: listing, entries: entries, password: password, service: service, library: library, recent: recent
+        ) {
+            extracted = folder
+        }
+    }
+
+    /// Extracts several archives, each into a new folder next to it, one after another: they
+    /// share this object's progress card and password prompt, so they can't run at once.
+    /// Cancel stops the rest; skipping one archive's password skips only that archive.
+    public func extract(_ urls: [URL], service: ArchiveService, library: FileLibrary, recent: RecentStore) async {
+        guard urls.count > 1 else {
+            if let url = urls.first { await extract(url, service: service, library: library, recent: recent) }
+            return
+        }
+        var folders: [URL] = []
+        loop: for url in urls {
+            switch await extractOne(url, service: service, library: library, recent: recent) {
+            case .extracted(let folder): folders.append(folder)
+            case .skipped: continue
+            case .cancelled: break loop
+            }
+        }
+        // An error alert from one of them stays up; it says more than the summary.
+        guard alert == nil else { return }
+        if folders.count == 1 {
+            extracted = folders[0]
+        } else if folders.count > 1 {
+            alert = AlertContent(title: "Extracted \(folders.count) archives", message: "Each one is in a new folder next to it.")
+        }
+    }
+
+    private enum ExtractOutcome { case extracted(URL), skipped, cancelled }
+
+    private func extractOne(
+        _ url: URL, listing: ArchiveListing? = nil, entries: [ArchiveEntry]? = nil, password: String? = nil,
+        service: ArchiveService, library: FileLibrary, recent: RecentStore
+    ) async -> ExtractOutcome {
         do {
             let result = try await withPassword(for: url, initial: password) { (password) throws(ArchiveError) -> URL in
                 let opened: ArchiveListing
@@ -98,18 +139,20 @@ public final class ArchiveActions {
                 } else {
                     opened = try await service.open(url, password: password)
                 }
-                return try await operation.run("Extracting…") { (progress) throws(ArchiveError) in
+                return try await operation.run("Extracting \(url.lastPathComponent)…") { (progress) throws(ArchiveError) in
                     try await service.extractToNewFolder(opened, entries: entries, password: password, progress: progress)
                 }
             }
-            guard let folder = result?.value else { return }
+            guard let folder = result?.value else { return .skipped }
             library.noteChange()
             recent.record(library.relativePath(of: folder), .extracted)
-            extracted = folder
+            return .extracted(folder)
         } catch .cancelled {
             library.noteChange()
+            return .cancelled
         } catch {
             alert = AlertContent("Can't extract \(url.lastPathComponent)", error)
+            return .skipped
         }
     }
 

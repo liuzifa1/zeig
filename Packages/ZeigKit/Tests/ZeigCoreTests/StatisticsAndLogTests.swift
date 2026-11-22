@@ -18,6 +18,21 @@ import ZeigCore
         #expect(stats.savings == 0.75)
     }
 
+    /// Header sizes are whatever the archive says. Adding two near-maximum ones used to trap and
+    /// crash the app on opening a few-hundred-byte crafted archive.
+    @Test func hugeClaimedSizesDontOverflow() {
+        let entries = [
+            ArchiveEntry(index: 0, path: "a/x.bin", size: .max - 1),
+            ArchiveEntry(index: 1, path: "a/y.bin", size: .max - 1),
+            ArchiveEntry(index: 2, path: "a/b/z.bin", size: 5),
+        ]
+        let stats = ArchiveStatistics(entries: entries, archiveSize: 300)
+        #expect(stats.originalSize == .max)
+        let tree = ArchiveTree(entries: entries)
+        #expect(tree.children(of: "").first?.size == .max, "the folder total stops at the maximum")
+        #expect(UInt64(3).addingSaturating(4) == 7)
+    }
+
     @Test func emptyArchivesHaveNoRatio() {
         #expect(ArchiveStatistics(entries: [], archiveSize: 22).ratio == nil)
     }

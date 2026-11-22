@@ -15,13 +15,17 @@ import ZeigCore
 /// costs nothing while hidden. It only plays video, so this renders the log into pixel buffers
 /// and feeds them to an `AVSampleBufferDisplayLayer` as a live stream:
 ///
-/// 1. `start()` puts a 1-point view with the display layer behind the key window's content
+/// 1. `prepare()` puts a 1-point view with the display layer behind the key window's content
 ///    (PiP needs the layer in a window, not visible), enqueues a first frame, and makes an
-///    `AVPictureInPictureController` for it.
-/// 2. Once the controller says PiP is possible, it starts. A new frame goes out whenever the
-///    log changes (checked a few times a second).
-/// 3. The window's pause button freezes the lines; its "back to app" button runs `onRestore`
-///    (the app opens the full console); closing it runs `onStop`.
+///    `AVPictureInPictureController` for it. It runs when developer mode is on, so the
+///    controller is ready by the time of the tap, and it stays for the next time.
+/// 2. `toggle()` follows `PictureInPictureState`: if the window isn't up, it brings it up.
+///    Only iOS's own callbacks count as "on", because a start can fail without any callback;
+///    a watchdog notices that, and retries with a new controller.
+/// 3. While it's up, a new frame goes out when the log changes, and about once a second anyway
+///    (iOS shows a spinner over a stream that has gone quiet).
+/// 4. The window's pause button freezes the lines; its "back to app" button runs `onRestore`
+///    (the app opens the full console).
 ///
 /// PiP needs the audio session's playback category (mixing with other audio, so music keeps
 /// playing) and the `audio` background mode in Info.plist. Starting it must follow a tap.
@@ -30,39 +34,35 @@ import ZeigCore
 public final class ConsolePictureInPicture: NSObject {
     public static let shared = ConsolePictureInPicture()
 
-    /// The window is showing (or about to).
-    public private(set) var isActive = false
+    public private(set) var state = PictureInPictureState()
     /// The user tapped the window's "back to app" button.
     @ObservationIgnored public var onRestore: (@MainActor () -> Void)?
 
     public static var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
 
+    /// How long iOS gets to show or close the window before it counts as not happening.
+    private static let patience: Duration = .seconds(2)
+
     @ObservationIgnored private var controller: AVPictureInPictureController?
     @ObservationIgnored private var layerView: DisplayLayerView?
     @ObservationIgnored private var possibleObservation: NSKeyValueObservation?
     @ObservationIgnored private var renderTask: Task<Void, Never>?
+    @ObservationIgnored private var watchdog: Task<Void, Never>?
     @ObservationIgnored private var lastRenderedID: UInt64 = .max
     /// Read by the playback delegate, which AVKit calls outside the main actor's knowledge.
     @ObservationIgnored private let paused = Mutex(false)
 
-    public func toggle() {
-        if isActive { stop() } else { start() }
-    }
-
-    public func start() {
-        guard !isActive, Self.isSupported, let window = Self.keyWindow else {
-            if !Self.isSupported { ZeigLog.warning("console", "picture in picture isn't supported here") }
-            return
-        }
-        isActive = true
-        paused.withLock { $0 = false }
+    /// Gets the controller ready ahead of the tap. Safe to call again.
+    public func prepare() {
+        guard Self.isSupported else { return }
+        if controller != nil, layerView?.window != nil { return }
+        discardController()
+        guard let window = Self.keyWindow else { return }
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             ZeigLog.warning("console", "audio session: \(error.localizedDescription)")
         }
-
         let view = DisplayLayerView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
         view.isUserInteractionEnabled = false
         window.insertSubview(view, at: 0)
@@ -74,42 +74,117 @@ public final class ConsolePictureInPicture: NSObject {
         controller.delegate = self
         controller.requiresLinearPlayback = true
         self.controller = controller
-        possibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] controller, _ in
+        possibleObservation = controller.observe(\.isPictureInPicturePossible, options: [.new]) { [weak self] controller, _ in
             guard controller.isPictureInPicturePossible else { return }
-            Task { @MainActor in self?.beginIfReady() }
+            Task { @MainActor in self?.askToStart() }
         }
-
-        renderTask = Task { [weak self] in
-            while !Task.isCancelled {
-                self?.render(force: false)
-                try? await Task.sleep(for: .milliseconds(300))
-            }
-        }
-        ZeigLog.info("console", "picture in picture requested")
     }
 
+    /// The control's press: brings the window up if it isn't up, closes it if it is.
+    public func toggle() {
+        guard Self.isSupported else {
+            ZeigLog.warning("console", "picture in picture isn't supported here")
+            return
+        }
+        // A callback may have been missed: believe the controller over the last known state.
+        if controller?.isPictureInPictureActive == true {
+            if state.phase != .on { state.systemStarted() }
+        } else if state.phase == .on {
+            perform(state.systemStopped())
+        }
+        perform(state.press())
+    }
+
+    /// Closes the window if it's up (developer mode turned off).
     public func stop() {
-        guard isActive else { return }
-        controller?.stopPictureInPicture()
-        tearDown()
+        perform(state.turnOff())
     }
 
-    private func beginIfReady() {
-        guard isActive, let controller, controller.isPictureInPicturePossible, !controller.isPictureInPictureActive else { return }
+    private func perform(_ action: PictureInPictureState.Action) {
+        switch action {
+        case .none:
+            break
+        case .start:
+            begin()
+        case .restart:
+            discardController()
+            begin()
+        case .stop:
+            controller?.stopPictureInPicture()
+            startWatchdog()
+        case .finish:
+            finish()
+        }
+    }
+
+    private func begin() {
+        paused.withLock { $0 = false }
+        ZeigLog.info("console", "picture in picture requested")
+        prepare()
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            ZeigLog.warning("console", "audio session: \(error.localizedDescription)")
+        }
+        startRendering()
+        askToStart()
+        startWatchdog()
+    }
+
+    private func askToStart() {
+        guard case .starting = state.phase, let controller,
+              controller.isPictureInPicturePossible, !controller.isPictureInPictureActive else { return }
         controller.startPictureInPicture()
     }
 
-    private func tearDown() {
-        isActive = false
+    /// When iOS doesn't do what was asked in time: treat it as a failed start, or as closed.
+    private func startWatchdog() {
+        watchdog?.cancel()
+        watchdog = Task { [weak self] in
+            try? await Task.sleep(for: Self.patience)
+            guard !Task.isCancelled, let self else { return }
+            switch state.phase {
+            case .starting:
+                ZeigLog.warning("console", "picture in picture didn't start in time")
+                perform(state.attemptFailed())
+            case .stopping:
+                perform(state.systemStopped())
+            case .off, .on:
+                break
+            }
+        }
+    }
+
+    private func startRendering() {
+        render(force: true)
+        renderTask?.cancel()
+        renderTask = Task { [weak self] in
+            var tick = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(300))
+                tick += 1
+                self?.render(force: tick % 3 == 0)
+            }
+        }
+    }
+
+    /// The window is gone. The controller stays, ready for the next press.
+    private func finish() {
+        watchdog?.cancel()
+        watchdog = nil
         renderTask?.cancel()
         renderTask = nil
+        if state.failed { ZeigLog.error("console", "picture in picture didn't start") }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    private func discardController() {
         possibleObservation = nil
         controller = nil
         layerView?.displayLayer.sampleBufferRenderer.flush(removingDisplayedImage: true)
         layerView?.removeFromSuperview()
         layerView = nil
         lastRenderedID = .max
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func render(force: Bool) {
@@ -133,10 +208,18 @@ public final class ConsolePictureInPicture: NSObject {
 }
 
 extension ConsolePictureInPicture: AVPictureInPictureControllerDelegate {
+    nonisolated public func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        MainActor.assumeIsolated {
+            watchdog?.cancel()
+            state.systemStarted()
+            ZeigLog.info("console", "picture in picture started")
+        }
+    }
+
     nonisolated public func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         MainActor.assumeIsolated {
-            // Closed from the window's own button (stop() has already torn down otherwise).
-            if isActive { tearDown() }
+            watchdog?.cancel()
+            perform(state.systemStopped())
             ZeigLog.info("console", "picture in picture closed")
         }
     }
@@ -146,8 +229,8 @@ extension ConsolePictureInPicture: AVPictureInPictureControllerDelegate {
         failedToStartPictureInPictureWithError error: any Error
     ) {
         MainActor.assumeIsolated {
-            ZeigLog.error("console", "picture in picture didn't start: \(error.localizedDescription)")
-            tearDown()
+            ZeigLog.warning("console", "picture in picture failed: \(error.localizedDescription)")
+            perform(state.attemptFailed())
         }
     }
 

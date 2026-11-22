@@ -22,8 +22,10 @@ to test and every other module can use it.
 | `FormatOptions`, `FormatOption` | **Add advanced settings here:** per-format options with a one-line summary and a guide topic. |
 | `GuideTopic` | The full explanations (Format Guide, ⓘ buttons). |
 | `ArchiveTree` | An archive's flat entry list as folders (implicit folders included), for browsing and extracting a folder. |
+| `PictureInPictureState` | What a press on the console's picture-in-picture control means, without AVKit, so it can be tested: if the window isn't up, a press brings it up. "On" is only what iOS confirmed. |
 | `ZeigLog`, `NativeOutputCapture` | The developer console's log (thread-safe ring buffer, also sent to the unified log), and copying stdout/stderr into it. |
-| `FileNaming` | "name 2.ext", compound extensions, archive names, extraction folders. |
+| `FileNaming` | "name 2.ext", compound extensions, archive names, extraction folders. `unique` treats an existing split set ("name.part1.rar") as taken. |
+| `UInt64.addingSaturating` | Adds sizes that come from archive headers without trapping: an archive can claim any size. |
 
 ## Extending
 

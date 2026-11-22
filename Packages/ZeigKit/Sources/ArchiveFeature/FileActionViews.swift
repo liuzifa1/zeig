@@ -52,7 +52,8 @@ struct FileMenu: View {
                     Button("Compress \(items.count) Items", systemImage: "doc.zipper") { compress() }
                     if items.allSatisfy(\.isArchive) {
                         Button("Extract \(items.count) Archives", systemImage: "arrow.down.doc") {
-                            for item in items { extract(item) }
+                            let urls = items.map(\.url)
+                            Task { await model.actions.extract(urls, service: service, library: library, recent: recent) }
                         }
                     }
                     Button("Duplicate", systemImage: "plus.square.on.square") { duplicate() }
@@ -87,13 +88,7 @@ struct FileMenu: View {
     }
 
     private func newFolder() {
-        do {
-            let created = try library.newFolder(containing: items.map(\.url))
-            model.isSelecting = false
-            model.renaming = library.item(for: created)
-        } catch {
-            model.actions.alert = AlertContent(title: "Can't create the folder", message: error.localizedDescription)
-        }
+        model.newFolder(containing: items, library: library, recent: recent)
     }
 }
 
@@ -112,7 +107,8 @@ extension Array {
 /// Delete doesn't ask first (`FolderModel.delete`). Move opens the system's move sheet (`FolderContent`'s `fileMover`).
 struct SelectionToolbar: ToolbarContent {
     let model: FolderModel
-    let folder: URL
+    /// Where Compress puts the archive; `nil` for the selection's own folder (Recent).
+    let folder: URL?
     @Environment(FileLibrary.self) private var library
     @Environment(RecentStore.self) private var recent
     @Environment(AppSettings.self) private var settings
@@ -138,7 +134,8 @@ struct SelectionToolbar: ToolbarContent {
         Button("Extract", systemImage: "arrow.down.doc") { extract() }
             .disabled(items.isEmpty || !items.allSatisfy(\.isArchive))
         Button("Compress", systemImage: "doc.zipper") {
-            model.packSources = PackSources(urls: items.map(\.url), folder: folder)
+            let urls = items.map(\.url)
+            model.packSources = PackSources(urls: urls, folder: folder ?? library.commonFolder(of: urls))
         }
         .disabled(items.isEmpty)
         Button("Move", systemImage: "folder") { model.moving = items }
@@ -154,7 +151,12 @@ struct SelectionToolbar: ToolbarContent {
                 FilePasteboard.copy(items.map(\.url))
                 model.isSelecting = false
             }
-            Button("New Folder with Items", systemImage: "folder.badge.plus") { newFolder() }
+            Button("New Folder with Items", systemImage: "folder.badge.plus") {
+                model.newFolder(containing: items, library: library, recent: recent)
+            }
+            if let extra = model.extraSelectionAction {
+                Button(extra.title, systemImage: extra.systemImage) { extra.perform(items) }
+            }
         }
         .disabled(items.isEmpty)
     }
@@ -163,19 +165,7 @@ struct SelectionToolbar: ToolbarContent {
         let service = ArchiveService(settings: settings.routing)
         let urls = items.map(\.url)
         model.isSelecting = false
-        Task {
-            for url in urls { await model.actions.extract(url, service: service, library: library, recent: recent) }
-        }
-    }
-
-    private func newFolder() {
-        do {
-            let created = try library.newFolder(containing: items.map(\.url))
-            model.isSelecting = false
-            model.renaming = library.item(for: created)
-        } catch {
-            model.actions.alert = AlertContent(title: "Can't create the folder", message: error.localizedDescription)
-        }
+        Task { await model.actions.extract(urls, service: service, library: library, recent: recent) }
     }
 }
 

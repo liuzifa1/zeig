@@ -33,14 +33,24 @@ for slice in "${SLICES[@]}"; do
     # USE_ASM is off: the hand-written ARM64 assembly is only a small speed-up for LZMA
     # decoding, and the C versions build everywhere. The final link of 7z.so fails for iOS
     # targets and isn't needed (-k keeps going); only the object files are used.
-    (cd "$SEVENZIP/CPP/7zip/Bundles/Format7zF" && make -k -f makefile.gcc -j"$JOBS" \
-        O="$objects" CC="clang" CXX="clang++" MY_ARCH="$arch" \
-        IS_ARM64=1 USE_ASM= CFLAGS_WARN="-w" CFLAGS_WARN_WALL= \
-        >"$objects.log" 2>&1) || true
-    count="$(ls "$objects"/*.o 2>/dev/null | wc -l | tr -d ' ')"
-    if [ "$count" -lt 200 ]; then
-        echo "7-Zip compile failed ($count objects); see $objects.log" >&2
-        grep -m 20 -E 'error' "$objects.log" >&2 || tail -30 "$objects.log" >&2
+    #
+    # Every source file must compile: the combined object below links even with some missing,
+    # and the app then fails to link with undefined 7-Zip symbols. In an iCloud-synced checkout
+    # a source read can time out ("Operation timed out"), so failed files get two more tries
+    # (make only redoes what's missing), and any compile error left stops the build here.
+    for attempt in 1 2 3; do
+        (cd "$SEVENZIP/CPP/7zip/Bundles/Format7zF" && make -k -f makefile.gcc -j"$JOBS" \
+            O="$objects" CC="clang" CXX="clang++" MY_ARCH="$arch" \
+            IS_ARM64=1 USE_ASM= CFLAGS_WARN="-w" CFLAGS_WARN_WALL= \
+            >"$objects.log" 2>&1) || true
+        # Compile errors only; the expected 7z.so link failure is "linker command failed".
+        errors="$(grep -E '(fatal )?error:' "$objects.log" | grep -v 'linker command failed' || true)"
+        [ -z "$errors" ] && break
+        [ "$attempt" -lt 3 ] && log "$slice: $(echo "$errors" | wc -l | tr -d ' ') compile error(s), retrying"
+    done
+    if [ -n "$errors" ]; then
+        echo "7-Zip compile failed; see $objects.log" >&2
+        echo "$errors" | head -20 >&2
         exit 1
     fi
 

@@ -17,10 +17,17 @@ struct DeveloperSection: View {
             Button("Open Console") { showsConsole = true }
             #if os(iOS)
             if ConsolePictureInPicture.isSupported {
+                // Every press goes to `toggle()`, whatever the switch shows: if the window isn't
+                // up, it brings it up. The switch follows what iOS confirms.
                 Toggle("Picture in picture", isOn: Binding(
-                    get: { ConsolePictureInPicture.shared.isActive },
-                    set: { $0 ? ConsolePictureInPicture.shared.start() : ConsolePictureInPicture.shared.stop() }
+                    get: { ConsolePictureInPicture.shared.state.showsOn },
+                    set: { _ in ConsolePictureInPicture.shared.toggle() }
                 ))
+                if ConsolePictureInPicture.shared.state.failed {
+                    Text("Picture in picture didn't start. Try again.")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
             }
             #endif
             Toggle("Capture native output", isOn: $settings.capturesNativeOutput)

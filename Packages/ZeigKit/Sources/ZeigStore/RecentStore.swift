@@ -56,8 +56,9 @@ public final class RecentStore {
         save()
     }
 
+    /// Removes the entry, and every entry inside it when it's a folder.
     public func remove(_ relativePath: String) {
-        entries.removeAll { $0.relativePath == relativePath }
+        entries.removeAll { $0.relativePath == relativePath || $0.relativePath.hasPrefix(relativePath + "/") }
         save()
     }
 
@@ -69,11 +70,23 @@ public final class RecentStore {
         save()
     }
 
-    /// After a rename or move, keeps the entry pointing at the file.
+    /// After a rename or move, keeps the entry pointing at the file. When a folder moves, the
+    /// entries inside it move with it.
     public func move(_ oldPath: String, to newPath: String) {
-        guard let index = entries.firstIndex(where: { $0.relativePath == oldPath }) else { return }
-        entries[index].relativePath = newPath
-        save()
+        guard oldPath != newPath else { return }
+        let prefix = oldPath + "/"
+        var changed = false
+        for index in entries.indices {
+            let path = entries[index].relativePath
+            if path == oldPath {
+                entries[index].relativePath = newPath
+                changed = true
+            } else if path.hasPrefix(prefix) {
+                entries[index].relativePath = newPath + "/" + path.dropFirst(prefix.count)
+                changed = true
+            }
+        }
+        if changed { save() }
     }
 
     public func clear() {

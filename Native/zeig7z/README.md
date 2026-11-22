@@ -59,7 +59,8 @@ always passes one when it knows the format), only those are tried.
 
 **Safety on extraction.** `sanitizedRelativePath` drops leading `/`, empty, `.` and `..`
 components, so an archive can never write outside the destination ("zip slip"). Symbolic links
-aren't created at all. Existing files are unlinked before writing, so a planted link can't
+aren't created at all. A hard link (an entry with no data that names an earlier file) gets a
+copy of that file (`copyfile` with `COPYFILE_CLONE`), not an empty file. Existing files are unlinked before writing, so a planted link can't
 redirect the write. Permission bits are kept, but owner read/write is always added.
 
 **Errors.** Every function returns a `zeig7z_result`, and `zeig7z_last_error()` gives the

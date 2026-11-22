@@ -121,7 +121,6 @@ public struct FolderContent: View {
                     }
                 }
             }
-            .modifier(SelectionToolbarPlacement(model: model, folder: folderURL))
             .task(id: "\(library.changeCount)|\(model.folder?.path ?? "")") { model.reload(library) }
             .onChange(of: scenePhase) { _, phase in
                 // Files may have been added in the Files app meanwhile.
@@ -130,37 +129,11 @@ public struct FolderContent: View {
             .fileImporter(isPresented: $model.isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 importFiles(result)
             }
-            .sheet(item: $model.packSources) { sources in
-                PackSheet(sources: sources) { model.isSelecting = false }
-            }
-            .sheet(item: $model.infoItem) { FileInfoSheet(item: $0) }
             .alert("New Folder", isPresented: $model.isCreatingFolder) {
                 TextField("Name", text: $newName)
                 Button("Cancel", role: .cancel) { newName = "" }
                 Button("Create") { createFolder() }
             }
-            .alert("Rename", isPresented: Binding(get: { model.renaming != nil }, set: { if !$0 { model.renaming = nil } })) {
-                TextField("Name", text: $newName)
-                Button("Cancel", role: .cancel) { model.renaming = nil }
-                Button("Rename") { rename() }
-            }
-            .alert("Extracted", isPresented: Binding(get: { model.actions.extracted != nil }, set: { if !$0 { model.actions.extracted = nil } })) {
-                Button("Show Folder") {
-                    if let folder = model.actions.extracted { open(folder: folder) }
-                    model.actions.extracted = nil
-                }
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("The files are in “\(model.actions.extracted?.lastPathComponent ?? "")”.")
-            }
-            .navigationDestination(item: $model.pushed) { route in
-                switch route {
-                case .folder(let url): FolderView(folder: url)
-                case .archive(let url): ArchiveView(url: url)
-                }
-            }
-            .quickLookPreview($model.previewURL)
-            .archiveActions(model.actions)
     }
 
     private var list: some View {
@@ -193,31 +166,9 @@ public struct FolderContent: View {
         } primaryAction: { ids in
             guard !model.isSelecting, ids.count == 1, let item = model.items(ids).first else { return }
             model.selection = []
-            open(item)
+            model.open(item)
         }
-        .modifier(EditModeFromSelection(isSelecting: $model.isSelecting))
-        // On the list, not next to `fileImporter`: two file dialogs on one view can block
-        // each other.
-        .fileMover(
-            isPresented: Binding(get: { model.moving != nil }, set: { if !$0 { model.moving = nil } }),
-            files: model.moving?.map(\.url) ?? []
-        ) { result in
-            moved(result)
-        }
-    }
-
-    private func open(_ item: FileItem) {
-        if item.isDirectory {
-            open(folder: item.url)
-        } else if item.isArchive {
-            model.pushed = .archive(item.url)
-        } else {
-            model.previewURL = item.url
-        }
-    }
-
-    private func open(folder: URL) {
-        if model.navigatesInPlace { model.go(to: folder) } else { model.pushed = .folder(folder) }
+        .fileActions(model: model, folder: folderURL)
     }
 
     // MARK: Actions
@@ -239,14 +190,77 @@ public struct FolderContent: View {
             model.actions.alert = AlertContent(title: "Can't create the folder", message: error.localizedDescription)
         }
     }
+}
+
+public extension View {
+    /// What a file list needs around it, for `FolderModel` to work: selecting (edit mode, the
+    /// toolbar in the tab bar's place), Compress, Get Info, Rename, Move, opening files and
+    /// pushing screens, and the archive operations' progress and alerts. Attach it to the
+    /// `List`. `folder` is where Compress puts the archive; `nil` for the selection's own folder.
+    func fileActions(model: FolderModel, folder: URL? = nil) -> some View {
+        modifier(FileActions(model: model, folder: folder))
+    }
+}
+
+private struct FileActions: ViewModifier {
+    @Bindable var model: FolderModel
+    let folder: URL?
+    @Environment(FileLibrary.self) private var library
+    @Environment(RecentStore.self) private var recent
+    @State private var newName = ""
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(EditModeFromSelection(isSelecting: $model.isSelecting))
+            .modifier(SelectionToolbarPlacement(model: model, folder: folder))
+            // Here, on the list, not next to a screen's `fileImporter`: two file dialogs on one
+            // view can block each other.
+            .fileMover(
+                isPresented: $model.isShowingMoveSheet,
+                files: model.moving?.map(\.url) ?? []
+            ) { result in
+                moved(result)
+            } onCancellation: {
+                model.moving = nil
+            }
+            .sheet(item: $model.packSources) { sources in
+                PackSheet(sources: sources) { model.isSelecting = false }
+            }
+            .sheet(item: $model.infoItem) { FileInfoSheet(item: $0) }
+            // Starts from the current name, like Files.
+            .onChange(of: model.renaming) { _, item in newName = item?.name ?? "" }
+            .alert("Rename", isPresented: Binding(get: { model.renaming != nil }, set: { if !$0 { model.renaming = nil } })) {
+                TextField("Name", text: $newName)
+                Button("Cancel", role: .cancel) { model.renaming = nil }
+                Button("Rename") { rename() }
+            }
+            .alert("Extracted", isPresented: Binding(get: { model.actions.extracted != nil }, set: { if !$0 { model.actions.extracted = nil } })) {
+                Button("Show Folder") {
+                    if let folder = model.actions.extracted { model.open(folder: folder) }
+                    model.actions.extracted = nil
+                }
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("The files are in “\(model.actions.extracted?.lastPathComponent ?? "")”.")
+            }
+            .navigationDestination(item: $model.pushed) { route in
+                switch route {
+                case .folder(let url): FolderView(folder: url)
+                case .archive(let url): ArchiveView(url: url)
+                }
+            }
+            .quickLookPreview($model.previewURL)
+            .archiveActions(model.actions)
+    }
 
     private func rename() {
         guard let item = model.renaming else { return }
         model.renaming = nil
-        defer { newName = "" }
         do {
             let renamed = try library.rename(item.url, to: newName)
-            recent.move(item.relativePath, to: library.relativePath(of: renamed))
+            let newPath = library.relativePath(of: renamed)
+            recent.move(item.relativePath, to: newPath)
+            if item.isDirectory { model.folderMoved(from: item.relativePath, to: newPath) }
         } catch {
             model.actions.alert = AlertContent(title: "Can't rename", message: error.localizedDescription)
         }
@@ -280,7 +294,7 @@ public struct FolderContent: View {
 /// builds this package just for tests.
 private struct SelectionToolbarPlacement: ViewModifier {
     let model: FolderModel
-    let folder: URL
+    let folder: URL?
 
     func body(content: Content) -> some View {
         #if os(iOS)

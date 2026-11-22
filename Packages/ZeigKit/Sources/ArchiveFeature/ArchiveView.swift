@@ -34,7 +34,7 @@ final class ArchiveModel {
     var summary: String {
         guard let listing else { return url.lastPathComponent }
         let files = listing.entries.filter { !$0.isDirectory }
-        let size = files.reduce(UInt64(0)) { $0 + $1.size }
+        let size = files.reduce(UInt64(0)) { $0.addingSaturating($1.size) }
         let count = files.count == 1 ? "1 file" : "\(files.count) files"
         let format = listing.format?.displayName ?? "Archive"
         return "\(format) · \(count) · \(size.formattedByteCount)"
@@ -113,6 +113,9 @@ public struct ArchiveView: View {
                     .navigationTitle(route.path.split(separator: "/").last.map(String.init) ?? "")
                     .inlineNavigationTitle()
                     .softTopScrollEdge()
+                    // The root's overlay is hidden under a pushed folder; its alerts still show.
+                    .overlay { OperationOverlay(model.actions.operation) }
+                    .animation(.default, value: model.actions.operation.isRunning)
             }
             .navigationDestination(item: $openedFolder) { FolderView(folder: $0) }
             .alert("Extracted", isPresented: Binding(get: { model.actions.extracted != nil }, set: { if !$0 { model.actions.extracted = nil } })) {
@@ -221,14 +224,17 @@ private struct ArchiveFolderList: View {
     }
 
     /// Extracts one file to a temporary folder and opens it in Quick Look, asking for the
-    /// password first if the entry is encrypted.
+    /// password first if the entry is encrypted. Shows progress with Cancel: the file may be
+    /// huge, and solid archives decompress everything before it too.
     private func preview(_ node: ArchiveTree.Node) async {
-        guard let listing = model.listing, let entry = node.entry else { return }
+        guard let listing = model.listing, let entry = node.entry, !model.actions.operation.isRunning else { return }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Preview-\(UUID().uuidString)")
         let service = ArchiveService(settings: settings.routing)
         do {
             let result = try await model.actions.withPassword(for: model.url, initial: model.password) { (password) throws(ArchiveError) in
-                try await service.extract(listing, entries: [entry], to: folder, password: password)
+                try await model.actions.operation.run("Opening \(node.name)…") { (progress) throws(ArchiveError) in
+                    try await service.extract(listing, entries: [entry], to: folder, password: password, progress: progress)
+                }
             }
             guard let result else {
                 try? FileManager.default.removeItem(at: folder)
@@ -237,6 +243,8 @@ private struct ArchiveFolderList: View {
             model.password = result.password
             previewFolder = folder
             previewURL = folder.appendingPathComponent(node.path)
+        } catch .cancelled {
+            try? FileManager.default.removeItem(at: folder)
         } catch {
             try? FileManager.default.removeItem(at: folder)
             model.actions.alert = AlertContent(title: "Can't preview \(node.name)", message: error.message, detail: error.detail)

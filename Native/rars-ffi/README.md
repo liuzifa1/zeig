@@ -131,3 +131,11 @@ notes at [bitplane/rar-research](https://github.com/bitplane/rar-research). Its 
 describe how the format knowledge was gathered. Zeig relies on its license and keeps it apart
 from 7-Zip's RAR decoder, which comes under the unRAR license restriction (it may not be used to
 re-create the RAR compressor). See Settings → Open Source Acknowledgements.
+
+## Split archives
+
+`write_volumes` writes each volume to a temporary name unique to that write (`create_new`, so it
+never reuses or follows an existing file), and renames them to `name.partN.rar` only if none of
+those names exist. Replacing part of an older set would destroy it, and its leftover parts
+would be read as part of the new one. Swift's `FileNaming.unique` already picks "name 2" when a
+set exists; this is the backstop. `split_archives_never_replace_existing_parts` tests it.

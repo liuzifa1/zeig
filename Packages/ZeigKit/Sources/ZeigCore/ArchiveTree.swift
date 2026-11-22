@@ -32,7 +32,8 @@ public struct ArchiveTree: Sendable {
                 let ancestor = parts[0..<depth].joined(separator: "/")
                 entriesUnder[ancestor, default: []].append(entry)
                 if depth > 0 {
-                    folders[ancestor, default: (0, nil)].size += entry.isDirectory ? 0 : entry.size
+                    folders[ancestor, default: (0, nil)].size = folders[ancestor, default: (0, nil)].size
+                        .addingSaturating(entry.isDirectory ? 0 : entry.size)
                 }
             }
             if entry.isDirectory {

@@ -188,7 +188,14 @@ public final class FileLibrary {
         return folder
     }
 
-    /// Every folder in the library, root first, then depth-first by name; for the Move picker.
+    /// Where something made from `urls` goes: their folder if they share one, else the top of
+    /// the library (a selection in Recent can span folders).
+    public func commonFolder(of urls: [URL]) -> URL {
+        let folders = Set(urls.map { $0.deletingLastPathComponent().standardizedFileURL })
+        return folders.count == 1 ? folders.first! : root
+    }
+
+    /// Every folder in the library, root first, then depth-first by name.
     public func allFolders() -> [FileItem] {
         func walk(_ folder: URL?) -> [FileItem] {
             contents(of: folder).filter(\.isDirectory).flatMap { [$0] + walk($0.url) }
