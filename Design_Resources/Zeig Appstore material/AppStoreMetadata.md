@@ -7,6 +7,10 @@
 - **Primary Category:** `Utilities`
 - **Secondary Category:** `Productivity`
 - **Copyright:** `© 2026 Zifa Liu`
+- **Price:** Free
+- **Age Rating:** 4+
+- **Support URL:** `https://liuzifa1.github.io/zeig/` (`docs/index.html`, GitHub Pages from `main` `/docs`)
+- **Privacy Policy URL:** `https://liuzifa1.github.io/zeig/privacy-policy.html`
 - **Keywords (83 / 100 chars):**
   ```
   zip,7z,rar,tar,unzip,unrar,archive,extract,compress,file,manager,7zip,zstd,iso,gzip

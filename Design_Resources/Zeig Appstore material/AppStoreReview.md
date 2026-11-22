@@ -18,8 +18,8 @@ Capabilities declared in `Info.plist`:
 ## 2. Tested devices
 
 The submitted iPhone/iPad build was tested on:
-- [Fill in physical iPhone model & iOS version/build before submitting, e.g. iPhone 15 Pro — iOS 26.x]
-- [Fill in physical iPad model & iPadOS version/build before submitting, e.g. iPad Pro 11-inch — iPadOS 26.x]
+- iPhone 15 Pro
+- iPad Pro (2021)
 
 Simulator verification during asset preparation was also performed on:
 - iPhone 17 Pro Max — iOS 26.2
