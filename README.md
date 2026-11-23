@@ -4,6 +4,8 @@ A native archive app for iPhone and iPad: open and create ZIP, 7z, tar and many 
 on the device, in Swift and SwiftUI.
 
 - **Platforms:** iOS / iPadOS 18+. Liquid Glass on 26+, with material fallbacks below.
+  Resizes with the window: iPad split screen and Stage Manager, and the iPhone Duo's outer and
+  inner screens, where folding or unfolding keeps each tab where it was.
 - **Engines:** [7-Zip](https://www.7-zip.org) (main), [libarchive](https://www.libarchive.org)
   (the formats 7-Zip can't create), and, experimental and off by default,
   [rars](https://github.com/bitplane/rars) for creating RAR archives.

@@ -154,6 +154,14 @@ it, and a `differences(…)` message so failures say what differs.
 - Hide the tab bar with `hidesTabBar(_:)` (UIKit), never `.toolbar(.hidden, for: .tabBar)`, which
   breaks the Search tab's field on 26+. `.bottomBar` toolbars don't exist on macOS, where the
   package builds for tests: keep them behind `#if os(iOS)`.
+- The app resizes: iPad windows, and the iPhone Duo, whose narrow outer screen and wide inner one
+  swap when it folds (the "iPhone Duo" simulator; its hinge is set with the simulator tools).
+  Folding must keep each tab where it was, so never put the `TabView` or a `NavigationStack`
+  behind an `if` on the size class: the branch change rebuilds them and drops the navigation.
+  Choose layouts by the size class inside screens, and keep `AdaptiveTabStyle` on the device type.
+  On the Duo the status bar sits in a column at the side, so the top has no safe area:
+  `PageHeader` adds room there itself (`VerticalBarTopMargin`). A custom bar of your own needs
+  the same, or it touches the screen's top edge.
 
 ## Don't
 

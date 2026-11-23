@@ -111,6 +111,11 @@ private struct SearchTabActivation: ViewModifier {
 
 /// Sidebar on iPad; the plain tab bar on iPhone, where Search keeps its own glass button
 /// (the sidebar-adaptable style folds it into the tab group).
+///
+/// By device, not by width, on purpose: the sidebar style already turns into a tab bar when an
+/// iPad window gets narrow, and it never shows a sidebar on an iPhone, even a wide one (an open
+/// iPhone Duo). Switching styles by size class would only rebuild the TabView, and with it
+/// every tab's navigation, each time a window crosses the width or the Duo folds.
 private struct AdaptiveTabStyle: ViewModifier {
     func body(content: Content) -> some View {
         if UIDevice.current.userInterfaceIdiom == .pad {

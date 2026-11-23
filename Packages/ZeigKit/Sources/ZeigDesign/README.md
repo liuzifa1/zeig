@@ -4,7 +4,7 @@ Shared look and small components.
 
 | Type | Purpose |
 |---|---|
-| `PageHeader`, `PageHeaderIcon`, `BackButton`, `.pageHeader`, `.pinnedTopBar`, `.softTopScrollEdge`, `.pageHeaderControl(in:)` | The Photos-style header, copied unchanged from HNReader (see `PageHeader.swift`'s doc comments). |
+| `PageHeader`, `PageHeaderIcon`, `BackButton`, `.pageHeader`, `.pinnedTopBar`, `.softTopScrollEdge`, `.pageHeaderControl(in:)` | The Photos-style header, from HNReader (see `PageHeader.swift`'s doc comments). One addition: when the system puts the status bar and bars in a side column (iPhone Duo, iOS 27.1+, read from `\.toolbarVerticalEdge`), the header gets 22 pt more at the top, so it doesn't touch the screen's edge and its row lines up with the system bar's title on pushed screens. It's a padding, not a branch, so folding doesn't rebuild the screen. |
 | `hnGlass(in:)`, `hnGlassContainer()`, `hnGlassButtonStyle()` | Liquid Glass with pre-26 fallbacks, from HNReader. Never call `glassEffect` directly. |
 | `ScopeSwitcher` | Photos' sliding switch (Search's All Files \| Archives). |
 | `LargeTitleItem` | A never-collapsing large title as a toolbar item (Search). |

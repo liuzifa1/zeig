@@ -54,7 +54,32 @@ public struct PageHeader<Leading: View, Title: View, Subtitle: View, Controls: V
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
+        .modifier(VerticalBarTopMargin())
         .padding(.bottom, 10)
+    }
+}
+
+/// Room above the header when the system puts the status bar and the bars in a column at the
+/// side (iPhone Duo, iOS 27.1+). The top of the screen then has no status bar and almost no
+/// safe area, and the header would touch the edge. With the margin, the controls' row lines up
+/// with the title of the system's own navigation bar on pushed screens.
+private struct VerticalBarTopMargin: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, macOS 27.1, *) {
+            content.modifier(Margin())
+        } else {
+            content
+        }
+    }
+
+    @available(iOS 27.1, macOS 27.1, *)
+    private struct Margin: ViewModifier {
+        @Environment(\.toolbarVerticalEdge) private var verticalEdge
+
+        // A padding that changes, not an `if`: folding a Duo must not rebuild the screen.
+        func body(content: Content) -> some View {
+            content.padding(.top, verticalEdge == nil ? 0 : 22)
+        }
     }
 }
 
