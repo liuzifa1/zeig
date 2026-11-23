@@ -12,11 +12,12 @@ import UIKit
 
 /// The Files-style menu for one item or a selection: Copy · Move · Share across the top, then
 /// Quick Look and Open In, then Get Info, Rename, Extract or Compress, Duplicate, New Folder
-/// with Items, and Delete at the bottom.
+/// with Items, the list's extra action (Recent's Remove from Recent), and Delete at the bottom.
 struct FileMenu: View {
     let items: [FileItem]
     let model: FolderModel
-    let folder: URL
+    /// Where Compress puts the archive; `nil` for the items' own folder (Recent).
+    let folder: URL?
     let service: ArchiveService
     @Environment(FileLibrary.self) private var library
     @Environment(RecentStore.self) private var recent
@@ -61,6 +62,9 @@ struct FileMenu: View {
                 }
             }
             Section {
+                if let extra = model.extraSelectionAction, model.offersExtraAction(for: items) {
+                    Button(extra.title, systemImage: extra.systemImage) { extra.perform(items) }
+                }
                 Button("Delete", systemImage: "trash", role: .destructive) {
                     model.delete(items, library: library, recent: recent)
                 }
@@ -75,7 +79,8 @@ struct FileMenu: View {
     }
 
     private func compress() {
-        model.packSources = PackSources(urls: items.map(\.url), folder: folder)
+        let urls = items.map(\.url)
+        model.packSources = PackSources(urls: urls, folder: folder ?? library.commonFolder(of: urls))
     }
 
     private func duplicate() {
@@ -154,7 +159,7 @@ struct SelectionToolbar: ToolbarContent {
             Button("New Folder with Items", systemImage: "folder.badge.plus") {
                 model.newFolder(containing: items, library: library, recent: recent)
             }
-            if let extra = model.extraSelectionAction {
+            if let extra = model.extraSelectionAction, model.offersExtraAction(for: items) {
                 Button(extra.title, systemImage: extra.systemImage) { extra.perform(items) }
             }
         }
@@ -269,7 +274,7 @@ struct FileInfoSheet: View {
 
     private var location: String {
         let parent = (item.relativePath as NSString).deletingLastPathComponent
-        return parent.isEmpty ? "Zeig" : "Zeig › " + parent.replacingOccurrences(of: "/", with: " › ")
+        return parent.isEmpty ? "Zeig!" : "Zeig! › " + parent.replacingOccurrences(of: "/", with: " › ")
     }
 
     /// Items and bytes under a folder, counted off the main actor.

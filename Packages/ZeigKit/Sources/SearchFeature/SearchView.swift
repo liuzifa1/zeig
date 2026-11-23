@@ -85,10 +85,7 @@ public struct SearchView: View {
                 if let item = results.first(where: { ids.contains($0.id) }) { open(item) }
             }
             .navigationDestination(item: $pushed) { route in
-                switch route {
-                case .folder(let url): FolderView(folder: url)
-                case .archive(let url): ArchiveView(url: url)
-                }
+                LibraryDestination(route, listedIn: nil) { pushed = $0 }
             }
             .overlay {
                 if query.isEmpty {

@@ -36,6 +36,12 @@ public struct SettingsView: View {
                     Text("Preselected when you compress files. You can change them each time.")
                 }
 
+                Section {
+                    NavigationLink("Storage") { StorageView() }
+                } footer: {
+                    Text("See what takes space, and delete what you don't need.")
+                }
+
                 experimentalSection
 
                 Section("Help") {
@@ -68,11 +74,11 @@ public struct SettingsView: View {
             } message: {
                 Text("The Developer section is above About: the console and the Font Lab. A console button also appears next to Settings in Browse and Recent.")
             }
-            .alert("Turn on the test RAR backend?", isPresented: $confirmingRars) {
+            .alert("Turn on rars?", isPresented: $confirmingRars) {
                 Button("Cancel", role: .cancel) {}
                 Button("Turn On") { settings.rarsEnabled = true }
             } message: {
-                Text("RAR archives will be created by rars, an independent open-source implementation that is still experimental. Archives it makes may not open in other apps, and it is slower than WinRAR.\n\nZeig checks every RAR it creates with 7-Zip and warns you if the check fails. Keep your original files until you've checked an archive opens where you need it.")
+                Text("RAR archives will be created by rars, an independent open-source implementation that is still experimental. Archives it makes may not open in other apps, and it is slower than WinRAR.\n\nZeig! checks every RAR it creates with 7-Zip and warns you if the check fails. Keep your original files until you've checked an archive opens where you need it.")
             }
         }
     }
@@ -102,7 +108,7 @@ public struct SettingsView: View {
                 }
             )) {
                 HStack {
-                    Text("Test RAR backend")
+                    Text("Enable rars")
                     ExperimentalBadge()
                 }
             }
@@ -115,17 +121,8 @@ public struct SettingsView: View {
                 if let topic = GuideTopic.topic("rar-experimental") { GuideTopicView(topic: topic) }
             }
         } header: {
+            // The badge on the switch and the confirmation before it turns on are the warning.
             Text("Experimental")
-        } footer: {
-            if settings.rarsEnabled {
-                Label {
-                    Text(settings.rarsOpensRar
-                         ? "rars creates and opens RAR archives. If it can't open one, 7-Zip tries."
-                         : "rars only creates RAR archives; 7-Zip, which is well tested, opens them.")
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                }
-            }
         }
     }
 }

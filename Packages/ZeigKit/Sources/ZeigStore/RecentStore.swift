@@ -100,3 +100,17 @@ public final class RecentStore {
         try? JSONEncoder().encode(entries).write(to: fileURL, options: .atomic)
     }
 }
+
+/// The day groups of the Recent list, newest first: Today, Yesterday, This Week, Earlier.
+public enum RecentDay {
+    /// The group `date` falls in. "This Week" is the six days before yesterday.
+    public static func title(for date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        let startOfToday = calendar.startOfDay(for: now)
+        let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday)!
+        let startOfWeek = calendar.date(byAdding: .day, value: -7, to: startOfToday)!
+        if date >= startOfToday { return "Today" }
+        if date >= startOfYesterday { return "Yesterday" }
+        if date >= startOfWeek { return "This Week" }
+        return "Earlier"
+    }
+}

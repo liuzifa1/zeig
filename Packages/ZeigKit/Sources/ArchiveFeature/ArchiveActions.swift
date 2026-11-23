@@ -171,19 +171,23 @@ public final class ArchiveActions {
 }
 
 public extension View {
-    /// The progress overlay, password prompt and alerts for `actions`.
-    func archiveActions(_ actions: ArchiveActions) -> some View {
-        modifier(ArchiveActionsUI(actions: actions))
+    /// The progress overlay, password prompt and alerts for `actions`. `showsProgress: false`
+    /// leaves out the overlay, for a control that shows the progress itself (Extract All).
+    func archiveActions(_ actions: ArchiveActions, showsProgress: Bool = true) -> some View {
+        modifier(ArchiveActionsUI(actions: actions, showsProgress: showsProgress))
     }
 }
 
 private struct ArchiveActionsUI: ViewModifier {
     @Bindable var actions: ArchiveActions
+    let showsProgress: Bool
     @State private var password = ""
 
     func body(content: Content) -> some View {
         content
-            .overlay { OperationOverlay(actions.operation) }
+            .overlay {
+                if showsProgress { OperationOverlay(actions.operation) }
+            }
             .animation(.default, value: actions.operation.isRunning)
             .alert(
                 actions.passwordPrompt?.wasWrong == true ? "Wrong password" : "Password needed",

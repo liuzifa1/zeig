@@ -32,7 +32,7 @@ public struct GuideTopic: Sendable, Identifiable, Hashable {
             summary: "ZIP to share, 7z to save space, tar.gz or tar.xz for Mac and Linux.",
             body: [
                 "ZIP opens on every phone and computer without extra apps. Use it when you send files to someone else.",
-                "7z usually makes smaller files than ZIP, especially for many files or big documents, and has strong AES-256 encryption. Windows and Mac need an app such as 7-Zip or Zeig to open it.",
+                "7z usually makes smaller files than ZIP, especially for many files or big documents, and has strong AES-256 encryption. Windows and Mac need an app such as 7-Zip or Zeig! to open it.",
                 "tar.gz and tar.xz are the usual formats on Mac and Linux. They keep Unix permissions and are good for code and backups. tar.xz is smaller, tar.gz is faster. They can't be encrypted.",
                 "The single-file formats (GZIP, XZ, Zstandard, …) compress exactly one file and keep no folders. Pick them only when a tool asks for that format.",
             ]
@@ -51,11 +51,11 @@ public struct GuideTopic: Sendable, Identifiable, Hashable {
             title: "Creating RAR archives (experimental)",
             summary: "Done by rars, an independent open-source RAR implementation. Off by default.",
             body: [
-                "RAR is a proprietary format, and the official RAR software can't be built into apps. Zeig creates RAR archives with rars, an independent open-source implementation of the format (github.com/bitplane/rars).",
+                "RAR is a proprietary format, and the official RAR software can't be built into apps. Zeig! creates RAR archives with rars, an independent open-source implementation of the format (github.com/bitplane/rars).",
                 "rars is young. Its author says it needs more testing at volume, and it is slower and compresses slightly less than WinRAR. Treat archives it makes as experimental: keep your originals until you have checked the archive opens where you need it.",
-                "To catch problems early, Zeig opens every RAR archive rars creates with 7-Zip, a separate RAR reader, and tells you if the check fails.",
+                "To catch problems early, Zeig! opens every RAR archive rars creates with 7-Zip, a separate RAR reader, and tells you if the check fails.",
                 "Opening RAR archives normally uses 7-Zip, which is well tested. You can also let rars open them, to try it out.",
-                "RAR is a trademark of win.rar GmbH. Zeig and rars aren't affiliated with it.",
+                "RAR is a trademark of win.rar GmbH. Zeig! and rars aren't affiliated with it.",
             ]
         ),
     ]
@@ -76,7 +76,7 @@ public struct GuideTopic: Sendable, Identifiable, Hashable {
             title: "Passwords",
             summary: "ZIP, 7z and RAR can be protected with a password.",
             body: [
-                "With a password, the contents can't be read without it. There's no way to recover a lost password, Zeig doesn't store it, and nobody can reset it.",
+                "With a password, the contents can't be read without it. There's no way to recover a lost password, Zeig! doesn't store it, and nobody can reset it.",
                 "7z and RAR use AES-256 encryption. ZIP also uses AES-256 by default; see ZIP encryption for older tools.",
                 "The file names stay visible unless you also turn on Encrypt file names (7z and RAR).",
             ]
@@ -104,7 +104,7 @@ public struct GuideTopic: Sendable, Identifiable, Hashable {
             title: "ZIP encryption",
             summary: "AES-256 is strong; ZipCrypto is weak but very compatible.",
             body: [
-                "AES-256 is modern, strong encryption. It opens in 7-Zip, WinRAR, Keka and Zeig, but not in some built-in unzip tools, such as Windows Explorer's.",
+                "AES-256 is modern, strong encryption. It opens in 7-Zip, WinRAR, Keka and Zeig!, but not in some built-in unzip tools, such as Windows Explorer's.",
                 "ZipCrypto is the original ZIP encryption. Every tool supports it, but it can be broken with freely available software. Use it only to keep files away from casual eyes, never for anything sensitive.",
             ]
         ),

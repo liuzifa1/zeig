@@ -15,6 +15,9 @@ final class ArchiveModel {
     var password: String?
     var failed = false
     let actions = ArchiveActions()
+    /// Extract All's own operation: its button shows the progress and the result, so it
+    /// doesn't share the overlay and the "Extracted" alert with the other actions.
+    let extractAll = ArchiveActions()
 
     init(url: URL) {
         self.url = url
@@ -48,14 +51,16 @@ struct ArchiveFolderRoute: Hashable {
 }
 
 /// An archive's contents: browse its folders, preview a file (tap), extract one item
-/// (long-press), or extract everything into a new folder next to the archive.
+/// (long-press), or extract everything into a new folder next to the archive (`ExtractAllButton`).
 public struct ArchiveView: View {
     @State private var model: ArchiveModel
     @Environment(AppSettings.self) private var settings
     @Environment(FileLibrary.self) private var library
     @Environment(RecentStore.self) private var recent
+    /// Open Extracted without a list that pushed this screen: shown on top instead.
     @State private var openedFolder: URL?
     @State private var showsInfo = false
+    @Environment(\.openExtracted) private var openExtracted
 
     public init(url: URL) {
         _model = State(initialValue: ArchiveModel(url: url))
@@ -77,16 +82,11 @@ public struct ArchiveView: View {
                         if model.listing?.backend == .rars { ExperimentalBadge() }
                     }
                     Spacer()
-                    Button {
-                        Task { await extract(nil) }
-                    } label: {
-                        Label("Extract All", systemImage: "arrow.down.doc")
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 16)
-                            .frame(height: pageHeaderControlSize)
+                    ExtractAllButton(actions: model.extractAll, isEnabled: model.listing != nil) {
+                        Task { await extractAll() }
+                    } open: { folder in
+                        open(extracted: folder)
                     }
-                    .pageHeaderControl(in: Capsule())
-                    .disabled(model.listing == nil)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -117,10 +117,12 @@ public struct ArchiveView: View {
                     .overlay { OperationOverlay(model.actions.operation) }
                     .animation(.default, value: model.actions.operation.isRunning)
             }
-            .navigationDestination(item: $openedFolder) { FolderView(folder: $0) }
+            .navigationDestination(item: $openedFolder) {
+                FolderView(folder: $0.deletingLastPathComponent(), showing: $0)
+            }
             .alert("Extracted", isPresented: Binding(get: { model.actions.extracted != nil }, set: { if !$0 { model.actions.extracted = nil } })) {
                 Button("Show Folder") {
-                    openedFolder = model.actions.extracted
+                    if let folder = model.actions.extracted { open(extracted: folder) }
                     model.actions.extracted = nil
                 }
                 Button("OK", role: .cancel) {}
@@ -131,6 +133,7 @@ public struct ArchiveView: View {
                 if let listing = model.listing { ArchiveInfoView(listing: listing) }
             }
             .archiveActions(model.actions)
+            .archiveActions(model.extractAll, showsProgress: false)
             .task {
                 await model.load(service: service)
                 if model.listing != nil { recent.record(library.relativePath(of: model.url), .opened) }
@@ -138,11 +141,108 @@ public struct ArchiveView: View {
             .environment(\.extractArchiveItems, ExtractItemsAction { entries in await extract(entries) })
     }
 
+    /// Shows an extracted folder in this screen's place, with the folder it's in under it.
+    private func open(extracted folder: URL) {
+        if let openExtracted { openExtracted(folder) } else { openedFolder = folder }
+    }
+
+    private func extractAll() async {
+        model.extractAll.extracted = nil
+        await model.extractAll.extract(
+            model.url, listing: model.listing, password: model.password,
+            service: service, library: library, recent: recent
+        )
+    }
+
     private func extract(_ entries: [ArchiveEntry]?) async {
         await model.actions.extract(
             model.url, listing: model.listing, entries: entries, password: model.password,
             service: service, library: library, recent: recent
         )
+    }
+}
+
+/// Extract All, then while extracting a stop button with the progress around it (tap to
+/// cancel), then Open Extracted. If that folder is gone by then, it offers Extract All again.
+private struct ExtractAllButton: View {
+    let actions: ArchiveActions
+    let isEnabled: Bool
+    let extract: () -> Void
+    let open: (URL) -> Void
+
+    private enum Phase: Hashable { case ready, running, done }
+
+    private var phase: Phase {
+        if actions.operation.isRunning { return .running }
+        if let folder = actions.extracted, FileManager.default.fileExists(atPath: folder.path) { return .done }
+        return .ready
+    }
+
+    var body: some View {
+        Group {
+            switch phase {
+            case .running:
+                Button { actions.operation.cancel() } label: {
+                    ExtractProgressRing(operation: actions.operation)
+                        .frame(width: pageHeaderControlSize, height: pageHeaderControlSize)
+                }
+                .pageHeaderControl(in: Circle())
+                .disabled(actions.operation.isCancelling)
+                .accessibilityLabel("Stop extracting")
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            case .done:
+                capsule("Open Extracted", systemImage: "folder") {
+                    if let folder = actions.extracted { open(folder) }
+                }
+            case .ready:
+                capsule("Extract All", systemImage: "arrow.down.doc", action: extract)
+                    .disabled(!isEnabled)
+            }
+        }
+        .animation(.snappy(duration: 0.3), value: phase)
+    }
+
+    private func capsule(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .fontWeight(.semibold)
+                .lineLimit(1)
+                // Full width; the archive's summary beside it gives way instead.
+                .fixedSize()
+                .padding(.horizontal, 16)
+                .frame(height: pageHeaderControlSize)
+        }
+        .pageHeaderControl(in: Capsule())
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+    }
+}
+
+/// A stop symbol inside a ring that fills as the operation goes, or spins while the total
+/// isn't known yet. Polls the operation's lock-protected numbers (see `OperationModel`).
+private struct ExtractProgressRing: View {
+    let operation: OperationModel
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+            let fraction = operation.fraction
+            ZStack {
+                Circle().stroke(Color.secondary.opacity(0.3), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: fraction.map { max(0.02, $0) } ?? 0.25)
+                    .stroke(.tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(fraction == nil ? spin(context.date) : -90))
+                    .animation(.linear(duration: 0.15), value: fraction)
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.tint)
+            }
+            .padding(9)
+        }
+    }
+
+    /// One turn a second.
+    private func spin(_ date: Date) -> Double {
+        date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360
     }
 }
 

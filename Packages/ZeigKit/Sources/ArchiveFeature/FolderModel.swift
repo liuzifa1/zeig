@@ -8,31 +8,40 @@ public struct FolderRow: Identifiable, Hashable {
     public var item: FileItem
     /// 0 for items of the folder itself, 1 for items of an expanded subfolder, …
     public var depth: Int
+    /// The second line instead of size and date (Recent's "Opened 2 hours ago").
+    public var detail: String?
+    /// The list section it's in (Recent's day groups); `nil` lists everything in one.
+    public var section: String?
     public var id: String { item.id }
+
+    public init(item: FileItem, depth: Int, detail: String? = nil, section: String? = nil) {
+        self.item = item
+        self.depth = depth
+        self.detail = detail
+        self.section = section
+    }
 }
 
 /// The state of one folder screen, shared by the list (`FolderContent`) and whatever hosts it
 /// (Browse's header, a pushed folder's toolbar).
 ///
 /// Like the Files app:
-/// - **Navigation in place** with back/forward history (`go(to:)`, `goBack()`, `goForward()`).
-///   Browse uses this; a folder pushed from Recent or Search pushes subfolders instead
-///   (`navigatesInPlace == false`).
+/// - **Tapping a folder pushes it** (`pushed`), in every tab.
 /// - **Inline expansion**: a folder's chevron shows its contents indented under it (`expanded`).
+/// - **What it lists**: a folder of the library, or the Recent list (`listsRecent`), grouped by
+///   day. Both get the same menus, swipes and selection toolbar.
 /// - **Selection**: `isSelecting` mirrors the list's edit mode, so the + menu, the header's
 ///   Select button and the list's two-finger drag all enter the same mode.
 @MainActor
 @Observable
 public final class FolderModel {
-    /// The folder shown; `nil` is the library root.
-    public private(set) var folder: URL?
-    public let navigatesInPlace: Bool
+    /// The folder shown; `nil` is the library root. For Recent, where new and imported files go.
+    public let folder: URL?
+    /// Lists the Recent entries (newest first, by day) instead of the folder's items.
+    public let listsRecent: Bool
     public private(set) var rows: [FolderRow] = []
     /// Relative paths of folders shown expanded inline.
     public var expanded: Set<String> = []
-
-    private var backStack: [URL?] = []
-    private var forwardStack: [URL?] = []
 
     public var isSelecting = false {
         didSet { if !isSelecting { selection = [] } }
@@ -41,6 +50,8 @@ public final class FolderModel {
 
     // Sheets, alerts and pushes the list presents.
     public var isImporting = false
+    /// Recent's Clear Recent, from the + menu; the Recent tab asks first.
+    public var isConfirmingClear = false
     public var isCreatingFolder = false
     public var packSources: PackSources?
     public var renaming: FileItem?
@@ -53,10 +64,12 @@ public final class FolderModel {
     public var isShowingMoveSheet = false
     public var infoItem: FileItem?
     public var previewURL: URL?
-    /// A screen to push (an archive; a folder when not navigating in place).
+    /// A screen to push: a folder or an archive.
     public var pushed: LibraryRoute?
     public let actions = ArchiveActions()
-    /// One more item for the selection toolbar's ⋯ menu (Recent's Remove from Recent).
+    /// One more action for the list's own items (Recent's Remove from Recent): in the selection
+    /// toolbar's ⋯ menu, the long-press menu and the swipe actions. Not offered for items
+    /// shown under an expanded folder, which aren't the list's own.
     public var extraSelectionAction: ExtraSelectionAction?
 
     /// See `extraSelectionAction`.
@@ -72,37 +85,24 @@ public final class FolderModel {
         }
     }
 
-    public init(folder: URL?, navigatesInPlace: Bool = false) {
+    /// A folder of the library; `nil` for the top.
+    public convenience init(folder: URL?) {
+        self.init(folder: folder, listsRecent: false)
+    }
+
+    /// The Recent tab's list.
+    public static func recent() -> FolderModel {
+        FolderModel(folder: nil, listsRecent: true)
+    }
+
+    private init(folder: URL?, listsRecent: Bool) {
         self.folder = folder
-        self.navigatesInPlace = navigatesInPlace
+        self.listsRecent = listsRecent
     }
 
     // MARK: Navigation
 
-    public var canGoBack: Bool { !backStack.isEmpty }
-    public var canGoForward: Bool { !forwardStack.isEmpty }
-    public var hasHistory: Bool { canGoBack || canGoForward }
-
-    public func go(to folder: URL?) {
-        guard folder != self.folder else { return }
-        backStack.append(self.folder)
-        forwardStack.removeAll()
-        moveTo(folder)
-    }
-
-    public func goBack() {
-        guard let previous = backStack.popLast() else { return }
-        forwardStack.append(folder)
-        moveTo(previous)
-    }
-
-    public func goForward() {
-        guard let next = forwardStack.popLast() else { return }
-        backStack.append(folder)
-        moveTo(next)
-    }
-
-    /// Tap: folders in place or pushed, archives pushed, other files in Quick Look.
+    /// Tap: folders and archives push, other files open in Quick Look.
     public func open(_ item: FileItem) {
         if item.isDirectory {
             open(folder: item.url)
@@ -114,41 +114,58 @@ public final class FolderModel {
     }
 
     public func open(folder: URL) {
-        if navigatesInPlace { go(to: folder) } else { pushed = .folder(folder) }
+        pushed = .folder(folder)
     }
-
-    private func moveTo(_ folder: URL?) {
-        self.folder = folder
-        isSelecting = false
-        needsReload = true
-    }
-
-    /// Set when the folder changed; the view reloads with the library it has at hand.
-    public private(set) var needsReload = true
 
     // MARK: Contents
 
-    public func reload(_ library: FileLibrary) {
-        needsReload = false
+    /// Lists the folder (or Recent) again, with the expanded folders' contents under them.
+    public func reload(_ library: FileLibrary, recent: RecentStore, now: Date = .now) {
         // Forget expansions of folders that are gone.
         expanded = expanded.filter { library.item(atRelativePath: $0) != nil }
         var rows: [FolderRow] = []
-        func add(_ folder: URL?, depth: Int) {
-            for item in library.contents(of: folder) {
-                rows.append(FolderRow(item: item, depth: depth))
-                if item.isDirectory, expanded.contains(item.id) { add(item.url, depth: depth + 1) }
+        // In Recent a file can be both an entry and inside an expanded folder that's another
+        // entry; the list needs unique rows, so it shows up only the first time.
+        var shown: Set<String> = []
+        func add(_ item: FileItem, depth: Int, detail: String? = nil, section: String? = nil) {
+            guard shown.insert(item.id).inserted else { return }
+            rows.append(FolderRow(item: item, depth: depth, detail: detail, section: section))
+            if item.isDirectory, expanded.contains(item.id) {
+                for child in library.contents(of: item.url) { add(child, depth: depth + 1, section: section) }
             }
         }
-        add(folder, depth: 0)
+        if listsRecent {
+            for entry in recent.entries {
+                guard let item = library.item(atRelativePath: entry.relativePath) else { continue }
+                let when = entry.date.formatted(.relative(presentation: .named, unitsStyle: .wide))
+                add(item, depth: 0, detail: "\(entry.action.label) \(when)", section: RecentDay.title(for: entry.date, now: now))
+            }
+        } else {
+            for item in library.contents(of: folder) { add(item, depth: 0) }
+        }
         self.rows = rows
         selection.formIntersection(rows.map(\.id))
     }
 
-    /// Shows these items instead of a folder's (Recent's list, which reuses the selection and
-    /// the file actions).
-    public func show(_ items: [FileItem]) {
-        rows = items.map { FolderRow(item: $0, depth: 0) }
-        selection.formIntersection(rows.map(\.id))
+    /// The rows by section, in order (Recent's day groups; one untitled section otherwise).
+    public var sections: [(title: String?, rows: [FolderRow])] {
+        var sections: [(title: String?, rows: [FolderRow])] = []
+        for row in rows {
+            // By title, not just runs of rows: the list needs each section once.
+            if let index = sections.firstIndex(where: { $0.title == row.section }) {
+                sections[index].rows.append(row)
+            } else {
+                sections.append((row.section, [row]))
+            }
+        }
+        return sections
+    }
+
+    /// Whether `extraSelectionAction` applies: only to the list's own items.
+    public func offersExtraAction(for items: [FileItem]) -> Bool {
+        guard extraSelectionAction != nil, !items.isEmpty else { return false }
+        let topLevel = Set(rows.filter { $0.depth == 0 }.map(\.id))
+        return items.allSatisfy { topLevel.contains($0.id) }
     }
 
     /// After a rename: folders shown expanded stay expanded under their new path.
@@ -160,9 +177,9 @@ public final class FolderModel {
         })
     }
 
-    public func toggleExpanded(_ item: FileItem, library: FileLibrary) {
+    public func toggleExpanded(_ item: FileItem, library: FileLibrary, recent: RecentStore) {
         if expanded.contains(item.id) { expanded.remove(item.id) } else { expanded.insert(item.id) }
-        reload(library)
+        reload(library, recent: recent)
     }
 
     /// Deletes right away, from the long-press menu, a swipe or the selection toolbar. No
@@ -217,6 +234,12 @@ public final class FolderModel {
 
     /// "Browse" at the root, else the folder's name.
     public var title: String { folder?.lastPathComponent ?? "Browse" }
+
+    /// "1 file", "12 files": Recent's header.
+    public var recentSummary: String {
+        let count = topLevelItems.count
+        return count == 1 ? "1 file" : "\(count) files"
+    }
 }
 
 /// What the create sheet compresses, and where the archive goes.

@@ -8,7 +8,8 @@ button at the top right.
 | `SettingsView` | Creating Archives (default format, level), Experimental (test RAR backend with a confirmation and warnings; "use it for opening RAR too"), Help (Format Guide), About (app, 7-Zip, libarchive and rars versions, and the pages below). |
 | `BackendsView` | Each engine's role and version, and who opens and creates each format right now. |
 | `DeveloperSection`, `FontLabView` | Developer mode (seven taps on the App version): the console sheet, its picture-in-picture window, native output capture, exporting, sharing and clearing the log, and the Font Lab. |
-| `AboutAppView`, `PrivacyPolicyView`, `OpenSourceView` | About (Filz!'s layout; the logo is `AppLogo` in Resources/Media.xcassets, a placeholder), privacy (no data collected, no network), and every bundled component with its license. |
+| `StorageView` | Settings › Storage: the app folder's bytes by kind (`StorageReport` in ZeigStore) and the device's free space, archives already extracted next to themselves, temporary files (Clear), and the largest files, with swipe to delete and Select to delete several (asks first, with how much it frees). |
+| `AboutAppView`, `PrivacyPolicyView`, `OpenSourceView` | About (Filz!'s layout; the logo is the Splash artwork, `Splash` in the app's asset catalog; three taps on it switch the home screen icon to App/AppSplash.icon and back, `AppIconChanger`), privacy (no data collected, no network), and every bundled component with its license. |
 | `AppInfo` | Name, version, copyright, and `sourceURL` (set it when the repository is public). |
 
 When a native library is updated, update its version in `OpenSourceView`.

@@ -23,7 +23,7 @@ settings:
     DEVELOPMENT_TEAM: MBBPM3967F
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "0.3.1"
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     DEAD_CODE_STRIPPING: YES
@@ -58,7 +58,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Zeig
+        CFBundleDisplayName: "Zeig!"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.utilities
@@ -76,7 +76,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         # Both keys together put the app's Documents folder in the Files app, under
-        # On My iPhone › Zeig (with only the first, the folder stays hidden). Files other apps
+        # On My iPhone › Zeig! (with only the first, the folder stays hidden). Files other apps
         # send are still copied into that folder (FileLibrary.adoptOpenedFile) before Zeig
         # works on them.
         UIFileSharingEnabled: true
@@ -107,6 +107,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: top.kitsune.zeig
         # App/App.icon, made in Icon Composer.
         ASSETCATALOG_COMPILER_APPICON_NAME: App
+        # App/AppSplash.icon: the Splash icon, the About page's easter egg (AppIconChanger).
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppSplash
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO

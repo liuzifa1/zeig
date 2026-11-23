@@ -1,4 +1,4 @@
-# Zeig
+# Zeig!
 
 A native archive app for iPhone and iPad: open and create ZIP, 7z, tar and many more formats,
 on the device, in Swift and SwiftUI.
@@ -14,16 +14,16 @@ on the device, in Swift and SwiftUI.
 
 | Area | What it does |
 |---|---|
-| **Browse** | The app's own folder (also in the Files app as On My iPhone › Zeig). A Photos-style header: large title, item count and size under it, and glass **+** and **Settings** buttons at the top right. Works like Files: tap a folder to go into it, with **back/forward** buttons; the chevron beside a folder expands it in place, with its contents sliding in under it; Quick Look thumbnails for images, PDFs and text. Archives push; other files open in Quick Look. |
+| **Browse** | The app's own folder (also in the Files app as On My iPhone › Zeig!). A Photos-style header: large title, item count and size under it, and glass **+** and **Settings** buttons at the top right. Works like Files: tap a folder to open it on its own screen; the chevron beside a folder expands it in place, with its contents sliding in under it; Quick Look thumbnails for images, PDFs and text. Archives push; other files open in Quick Look. |
 | **Long-press menu** | Like Files: **Copy · Move · Share** across the top, then Quick Look, Open In…, Get Info, Rename, Extract (archives) or Compress, Duplicate, New Folder with Item, Delete. Works on a selection too. Swipe left to delete. Deleting never asks first, as in Files, and it's permanent: there's no Recently Deleted. |
 | **Selecting** | In Browse and Recent: two-finger drag down the list, or + → Select. The header becomes **Select All · N Items · ✓**, and a toolbar takes the tab bar's place: **Extract · Compress · Move · Delete**, then ⋯ (Share, Copy N Items, New Folder with Items; in Recent also Remove from Recent, which keeps the files. Delete there deletes them). **Move** opens the system's move sheet, so files can also go to iCloud Drive or another app's folder. |
 | **+ menu** | Import from Files… (copies files in), Paste (files copied here or in Files), New Folder, Select. |
-| **Archives** | Tap to see what's inside, folder by folder, with sizes, dates and a lock on encrypted files. Tap a file to preview it, long-press a file or folder to extract just that, or **Extract All** into a new folder next to the archive ("photos.zip" → "photos", "photos 2" if taken). ⋯: Test Archive, Share, Info: how much it saves (compressed to N%, original and archive size), file and folder counts, encrypted files, dates, format, method, solid, parts, comment, and which engine opened it. |
+| **Archives** | Tap to see what's inside, folder by folder, with sizes, dates and a lock on encrypted files. Tap a file to preview it, long-press a file or folder to extract just that, or **Extract All** into a new folder next to the archive ("photos.zip" → "photos", "photos 2" if taken). While it runs, the button is a stop button with the progress around it; afterwards **Open Extracted** shows the extracted folder in the archive's place, with the folder it's in as the page under it. ⋯: Test Archive, Share, Info: how much it saves (compressed to N%, original and archive size), file and folder counts, encrypted files, dates, format, method, solid, parts, comment, and which engine opened it. |
 | **Passwords** | Asked for when needed, with "wrong password, try again". Never stored. |
 | **Create** | Name, format (common ones first, the rest under *More formats*), compression level, password (ZIP, 7z, RAR, with an eye icon to show it), and per-format **Advanced settings** on their own page, each with a one-line explanation and an ⓘ for the full one. Remembers your last advanced settings per format. |
-| **Recent** | Files you opened, created, extracted or imported, by day. Same header as Browse; its + menu imports files, starts selecting, or clears the list. |
+| **Recent** | Files you opened, created, extracted or imported, by day. The same list as Browse: long-press menu, swipes, selecting, folders that open or expand. Its + menu also clears the list; **Remove from Recent** (long-press, ⋯ or a full swipe) takes a file off the list and keeps it. |
 | **Search** | File names anywhere in the app's folder, with an **All Files \| Archives** switch showing counts. The tab bar's separate search button. |
-| **Settings** | Default format and level; **Experimental** (test RAR backend); Format Guide; the app's version; Backends (which engine does what, and each engine's version); About, Privacy Policy, Open Source Acknowledgements. |
+| **Settings** | Default format and level; **Storage**: what takes space in the app's folder (archives, extracted folders, other files, and the device's free space), archives you've already extracted (the archive can go, its folder stays), temporary files to clear, and the largest files, to delete one by one (swipe) or several at once (Select, after a confirmation); **Experimental** (Enable rars); Format Guide; the app's version; Backends (which engine does what, and each engine's version); About, Privacy Policy, Open Source Acknowledgements. Three taps on the logo in About switch the home screen icon to the Splash version and back. |
 | **Developer mode** | Tap the App version in Settings seven times. **Console**: the log of what the engines do (routing decisions, engine details, timings, errors), as a sheet with search, a level filter, share, export and clear; a console button appears next to Settings in Browse and Recent. **Picture in picture** shows the latest lines in the system's floating video window, over other apps too; its back button opens the full console. If the window isn't up, pressing the switch brings it up, and if iOS doesn't start it, Zeig tries again, then says so. **Export Log…** saves the log as a text file. **Capture native output** adds what the C, C++ and Rust code prints. **Font Lab**: a face (system, rounded, New York, mono, or any installed family) and a size for titles, file names, subtitles, indicators and guide text, with a live preview. |
 | **Open in Zeig** | Archives shared from other apps are moved or copied into the app's folder and opened. |
 
@@ -57,7 +57,7 @@ record, split into parts.
 RAR is proprietary, and RARLAB's own code can't be built into apps. Zeig creates RAR archives
 with rars, an independent open-source implementation that is still young. So:
 
-- It's **off** until you turn on Settings → Experimental → *Test RAR backend*, after a warning.
+- It's **off** until you turn on Settings → Experimental → *Enable rars*, after a warning.
 - RAR shows as *RAR (experimental)* in the format list, with a warning when chosen.
 - **Every RAR rars creates is opened and tested by 7-Zip**, which also checks the file names
   come out the same. If the check fails you're told, and the archive is kept so you can decide.

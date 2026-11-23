@@ -1,13 +1,18 @@
 # RecentFeature
 
-The Recent tab: `RecentStore` entries grouped Today / Yesterday / This Week / Earlier, under the
-same header as Browse. Its + menu imports files, starts selecting, or clears the list. Entries
-whose file is gone are pruned on appear.
+The Recent tab: `RecentStore` entries grouped Today / Yesterday / This Week / Earlier
+(`RecentDay` in ZeigStore), under the same header as Browse. Entries whose file is gone are
+pruned on appear.
 
-Selecting works as in Browse: `RecentView` keeps a `FolderModel` showing these items
-(`show(_:)`) and attaches `fileActions`, so it gets the same header, toolbar and sheets. The
-toolbar acts on the files themselves, so its Delete deletes them; ⋯ adds Remove from Recent
-(`extraSelectionAction`), which only takes them off the list. A selection can span folders, so
-Compress puts the archive in their shared folder, or at the top of the library.
+The list is `FolderContent` with `FolderModel.recent()`, so Recent has everything Browse has:
+the long-press menu, swipe to delete, selecting with the toolbar, folders that push on tap and
+expand with their chevron, and the + menu (import, paste, new folder, select). New and imported
+things go to the top of the library and join the list. Recent adds:
 
- `RecentView.sections` does the grouping (pure, testable).
+- **Remove from Recent** (`extraSelectionAction`): in the long-press menu, the toolbar's ⋯ and
+  as the full swipe. It only takes files off the list; Delete deletes them. Items shown under
+  an expanded folder aren't entries, so they don't get it.
+- **Clear Recent** in the + menu, after a confirmation.
+
+A selection can span folders, so Compress puts the archive in their shared folder, or at the
+top of the library.

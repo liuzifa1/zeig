@@ -103,7 +103,7 @@ struct PackSheet: View {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 }
                 .font(.footnote)
-                explanation("Zeig checks every RAR it makes with 7-Zip.", topic: "rar-experimental")
+                explanation("Zeig! checks every RAR it makes with 7-Zip.", topic: "rar-experimental")
             } else if format.isSingleFile {
                 explanation(
                     singleFileProblem ?? "Compresses one file, without folders.",
@@ -141,7 +141,7 @@ struct PackSheet: View {
         } header: {
             Text("Password")
         } footer: {
-            Text("Zeig doesn't keep the password. If it's forgotten, the files can't be recovered.")
+            Text("Zeig! doesn't keep the password. If it's forgotten, the files can't be recovered.")
         }
     }
 
