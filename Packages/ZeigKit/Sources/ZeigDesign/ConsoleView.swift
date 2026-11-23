@@ -131,7 +131,7 @@ public extension View {
             isPresented: isPresented,
             item: isPresented.wrappedValue ? ZeigLog.export() : nil,
             contentTypes: [.plainText],
-            defaultFilename: "Zeig Log \(Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash)))"
+            defaultFilename: "Zeig! Log \(Date.now.formatted(.iso8601.year().month().day().dateSeparator(.dash)))"
         ) { result in
             switch result {
             case .success(let url): ZeigLog.info("console", "log exported to \(url.lastPathComponent)")

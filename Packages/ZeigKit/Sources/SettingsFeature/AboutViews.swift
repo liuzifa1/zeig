@@ -3,10 +3,13 @@ import ZeigBackends
 import ZeigCore
 import ZeigDesign
 import ZeigStore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Name, version and links shown in Settings.
 enum AppInfo {
-    static let displayName = "Zeig"
+    static let displayName = "Zeig!"
 
     static var version: String {
         let info = Bundle.main.infoDictionary
@@ -18,7 +21,7 @@ enum AppInfo {
     /// The public repository. `nil` until it's published; the About page hides the link.
     static let sourceURL: URL? = nil
 
-    static let copyright = "© 2026 Zifa Liu. Released under the MIT License."
+    static let copyright = "© 2026 Arc Liu"
 }
 
 /// Settings → Backends: which engine handles which format, and their versions.
@@ -78,20 +81,25 @@ struct BackendsView: View {
 }
 
 /// About page, laid out like Filz!'s: the logo, the name, what the app is, where the source
-/// is, and the copyright, top-aligned. The logo is `AppLogo` in Resources/Media.xcassets
-/// (a placeholder until the real artwork).
+/// is, and the copyright, top-aligned. The logo is the Splash artwork (`Splash` in the app's
+/// asset catalog). Easter egg: three taps on it switch the app icon to the Splash version and
+/// back (`AppIconChanger`).
 struct AboutAppView: View {
+    @State private var logoTaps = TapCounter(needed: 3)
+
     var body: some View {
-        ScrollView {
             Section {
                 VStack(alignment: .leading) {
                     VStack(alignment: .leading) {
-                        Image("AppLogo", bundle: .module)
+                        Image("Splash")
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 200, height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 44, style: .continuous))
-                            .accessibilityHidden(true)
+                            .frame(width: 200)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if logoTaps.tap() { AppIconChanger.toggleSplash() }
+                            }
+                            .accessibilityLabel("\(AppInfo.displayName) logo")
                         Text(AppInfo.displayName)
                             .font(.headline)
                     }
@@ -115,7 +123,6 @@ struct AboutAppView: View {
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
         .navigationTitle(AppInfo.displayName)
     }
 }
@@ -162,7 +169,7 @@ struct OpenSourceView: View {
     private let components = [
         Component(
             name: "7-Zip", version: SevenZipBackend().version,
-            detail: "Igor Pavlov. Archive handlers and codecs; Zeig's C bridge to it (Native/zeig7z) is adapted from 7-Zip's Client7z sample and shares its license. The RAR decompression code carries the unRAR restriction: it may not be used to re-create the RAR compression algorithm. Zeig doesn't: RAR creation is done by rars, an independent implementation.",
+            detail: "Igor Pavlov. Archive handlers and codecs; Zeig!'s C bridge to it (Native/zeig7z) is adapted from 7-Zip's Client7z sample and shares its license. The RAR decompression code carries the unRAR restriction: it may not be used to re-create the RAR compression algorithm. Zeig! doesn't: RAR creation is done by rars, an independent implementation.",
             license: "GNU LGPL 2.1 or later, BSD 3-Clause (parts), unRAR license restriction",
             url: URL(string: "https://www.7-zip.org")!
         ),
@@ -233,12 +240,68 @@ struct OpenSourceView: View {
                 }
             }
             Section {
-                Text("7-Zip is used under the LGPL: its source, and the bridge Zeig adds to it, are in Zeig's repository (Native/vendor/7zip, Native/zeig7z), with the script that builds the library (Native/scripts/build-7zip.sh), so it can be modified and rebuilt.")
+                Text("7-Zip is used under the LGPL: its source, and the bridge Zeig! adds to it, are in Zeig!'s repository (Native/vendor/7zip, Native/zeig7z), with the script that builds the library (Native/scripts/build-7zip.sh), so it can be modified and rebuilt.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Open Source")
         .inlineNavigationTitle()
+    }
+}
+
+#Preview {
+    AboutAppView()
+}
+
+/// Counts taps that come close together: `tap()` is true on the `needed`th one. More
+/// forgiving than a triple-tap gesture, whose taps must be very quick.
+struct TapCounter {
+    let needed: Int
+    /// The longest gap between two taps that still counts.
+    var window: TimeInterval = 1.5
+    private var count = 0
+    private var last = Date.distantPast
+
+    init(needed: Int) {
+        self.needed = needed
+    }
+
+    mutating func tap(at now: Date = .now) -> Bool {
+        count = now.timeIntervalSince(last) <= window ? count + 1 : 1
+        last = now
+        guard count >= needed else { return false }
+        count = 0
+        return true
+    }
+}
+
+/// Switches the home screen icon between the main one (App/App.icon) and the Splash version
+/// (App/AppSplash.icon, listed in `project.yml` as an alternate icon). iOS confirms the change
+/// with its own alert.
+@MainActor
+enum AppIconChanger {
+    /// The alternate icon's name in the app's asset catalog.
+    static let splash = "AppSplash"
+
+    static func toggleSplash() {
+        #if canImport(UIKit)
+        let app = UIApplication.shared
+        guard app.supportsAlternateIcons else {
+            ZeigLog.info("icon", "alternate icons aren't supported here")
+            return
+        }
+        let next = app.alternateIconName == splash ? nil : splash
+        Task {
+            do {
+                try await app.setAlternateIconName(next)
+                ZeigLog.info("icon", "icon is now \(next ?? "the default")")
+            } catch {
+                // The Simulator often changes the icon and then fails to show iOS's alert,
+                // which reports an error too: say which icon is set now.
+                ZeigLog.error("icon", "couldn't change the icon: \(error.localizedDescription); it's \(app.alternateIconName ?? "the default")")
+            }
+        }
+        #endif
     }
 }

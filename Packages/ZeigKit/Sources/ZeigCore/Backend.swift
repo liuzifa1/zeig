@@ -196,15 +196,15 @@ public enum ArchiveError: Error, Sendable, Equatable {
     /// Short sentence for alerts.
     public var message: String {
         switch self {
-        case .unsupportedFormat: "This file isn't an archive Zeig can open."
+        case .unsupportedFormat: "This file isn't an archive Zeig! can open."
         case .passwordRequired: "This archive is protected with a password."
         case .wrongPassword: "The password is wrong."
         case .corrupt: "The archive is damaged."
-        case .unsupportedMethod: "The archive uses a compression method Zeig doesn't support."
+        case .unsupportedMethod: "The archive uses a compression method Zeig! doesn't support."
         case .io: "A file couldn't be read or written."
         case .cancelled: "Cancelled."
         case .invalidOptions: "These settings don't work for this format."
-        case .readOnlyFormat: "Zeig can open this format but not create it."
+        case .readOnlyFormat: "Zeig! can open this format but not create it."
         case .other: "Something went wrong."
         }
     }

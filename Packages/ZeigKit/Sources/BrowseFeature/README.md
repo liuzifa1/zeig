@@ -1,12 +1,12 @@
 # BrowseFeature
 
-The Browse tab, navigated in place like the Files app. `FolderContent` (ArchiveFeature) shows
-the current folder; this view adds the header and the tab's `NavigationStack` (for archives):
+The Browse tab: the top of the app's folder. `FolderContent` (ArchiveFeature) shows it, the same
+list Recent and every pushed folder use; this view adds the header and the tab's
+`NavigationStack`:
 
-- at the top with no history, the Photos-style `PageHeader` (title, count and size, + and
-  Settings);
-- after moving around, `HistoryButtons` (back/forward capsule) on the controls' row with the
-  folder's name as the large title under it;
+- the Photos-style `PageHeader` (title, count and size, + and Settings);
 - while selecting, `SelectionHeader` (Select All, count, Done).
 
-`openRequest` opens files other apps send ("Open in Zeig").
+Tapping a folder or an archive pushes it (`FolderView`, `ArchiveView`); a folder's chevron
+expands it in place. `openRequest` opens files other apps send ("Open in Zeig"), from the top of
+the tab's stack.

@@ -347,7 +347,7 @@ enum ConsoleFrame {
 
         let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let lineHeight = font.lineHeight * 1.1
-        let header = NSAttributedString(string: "Zeig console · \(entries.count)", attributes: [
+        let header = NSAttributedString(string: "Zeig! console · \(entries.count)", attributes: [
             .font: UIFont.monospacedSystemFont(ofSize: fontSize * 0.8, weight: .semibold),
             .foregroundColor: UIColor(white: 0.6, alpha: 1),
         ])

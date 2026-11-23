@@ -6,19 +6,23 @@ import ZeigCore
 import ZeigDesign
 import ZeigStore
 
-/// A folder pushed from Recent or Search: the system navigation bar with the folder's name,
-/// + in the toolbar, and Select / Select All / Done while selecting. Subfolders push too.
-/// (Browse shows the same list with in-place navigation under its own header.)
+/// A pushed folder (from Browse, Recent, Search or another folder): the system navigation bar
+/// with the folder's name, + in the toolbar, and Select / Select All / Done while selecting.
+/// Subfolders push too. (Browse and Recent show the same list under their own headers.)
 public struct FolderView: View {
     @State private var model: FolderModel
+    @Environment(FileLibrary.self) private var library
 
-    public init(folder: URL) {
-        _model = State(initialValue: FolderModel(folder: folder))
+    /// `showing` is a subfolder to push on top right away (`LibraryRoute.folderShowing`).
+    public init(folder: URL, showing child: URL? = nil) {
+        let model = FolderModel(folder: folder)
+        model.pushed = child.map { .folder($0) }
+        _model = State(initialValue: model)
     }
 
     public var body: some View {
         FolderContent(model: model)
-            .navigationTitle(model.isSelecting ? selectionTitle : model.title)
+            .navigationTitle(model.isSelecting ? selectionTitle : title)
             .inlineNavigationTitle()
             .softTopScrollEdge()
             .toolbar {
@@ -37,13 +41,20 @@ public struct FolderView: View {
             }
     }
 
+    /// The top of the library (pushed under an extracted folder) is "Browse", as in its tab,
+    /// not its name on disk.
+    private var title: String {
+        model.folder?.standardizedFileURL.path == library.root.standardizedFileURL.path ? "Browse" : model.title
+    }
+
     private var selectionTitle: String {
         model.selection.count == 1 ? "1 Item" : "\(model.selection.count) Items"
     }
 }
 
-/// The + menu: import, paste, new folder, select. `label` is the button's look (a glass circle
-/// in headers, a plain symbol in toolbars).
+/// The + menu: import, paste, new folder, select, and in Recent, Clear Recent. `label` is the
+/// button's look (a glass circle in headers, a plain symbol in toolbars). In Recent, new and
+/// imported things go to the top of the app's folder and join the list.
 public struct AddMenu<Label: View>: View {
     let model: FolderModel
     let label: Label
@@ -67,6 +78,10 @@ public struct AddMenu<Label: View>: View {
             Divider()
             Button("Select", systemImage: "checkmark.circle") { model.isSelecting = true }
                 .disabled(model.rows.isEmpty)
+            if model.listsRecent {
+                Button("Clear Recent", systemImage: "trash", role: .destructive) { model.isConfirmingClear = true }
+                    .disabled(recent.entries.isEmpty)
+            }
         } label: {
             label
         }
@@ -83,18 +98,19 @@ public struct AddMenu<Label: View>: View {
     }
 }
 
-/// A folder's list, with everything you can do to its items:
-/// - tap opens (folders in place or pushed, archives pushed, other files in Quick Look);
+/// A folder's list (or Recent's), with everything you can do to its items:
+/// - tap opens (folders and archives push, other files open in Quick Look);
 /// - the chevron expands a folder inline;
 /// - long-press opens the Files-style menu (`FileMenu`), for one item or the selection;
 /// - two-finger drag, Select in the + menu, or Select in the header start selecting; the
 ///   selection toolbar (`SelectionToolbar`) then takes the tab bar's place;
 /// - Move (menu or toolbar) opens the system's move sheet, which can also move files out of
 ///   the app's folder;
-/// - swipe left to delete. Every delete is immediate (`FolderModel.delete`), as in Files.
+/// - swipe left to delete. Every delete is immediate (`FolderModel.delete`), as in Files. In
+///   Recent the swipe also has Remove (from the list only), the full swipe.
 public struct FolderContent: View {
     @Bindable var model: FolderModel
-    /// Browse's root folder shows chevrons to expand folders inline; elsewhere they push.
+    /// Chevrons that expand folders inline (tapping a folder pushes it).
     var showsDisclosure: Bool
     @Environment(FileLibrary.self) private var library
     @Environment(RecentStore.self) private var recent
@@ -108,23 +124,46 @@ public struct FolderContent: View {
     }
 
     private var folderURL: URL { model.folder ?? library.root }
+    /// Where Compress puts archives: this folder, or in Recent the selection's own folder.
+    private var compressFolder: URL? { model.listsRecent ? nil : folderURL }
+    @Environment(\.fontTheme) private var fonts
+
+    /// What the list depends on, beyond the model: files changing, and Recent's entries.
+    private struct ReloadKey: Hashable {
+        var changeCount: Int
+        var folder: URL?
+        var recent: [RecentEntry]
+    }
     private var service: ArchiveService { ArchiveService(settings: settings.routing) }
 
     public var body: some View {
         list
             .overlay {
                 if model.rows.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Files", systemImage: "folder")
-                    } description: {
-                        Text("Import files with +, or add them in the Files app under On My iPhone › Zeig.")
+                    if model.listsRecent {
+                        ContentUnavailableView {
+                            Label("Nothing Yet", systemImage: "clock")
+                        } description: {
+                            Text("Archives you open, create or extract show up here.")
+                        }
+                    } else {
+                        ContentUnavailableView {
+                            Label("No Files", systemImage: "folder")
+                        } description: {
+                            Text("Import files with +, or add them in the Files app under On My iPhone › Zeig!.")
+                        }
                     }
                 }
             }
-            .task(id: "\(library.changeCount)|\(model.folder?.path ?? "")") { model.reload(library) }
+            .task(id: ReloadKey(
+                changeCount: library.changeCount, folder: model.folder,
+                recent: model.listsRecent ? recent.entries : []
+            )) {
+                model.reload(library, recent: recent)
+            }
             .onChange(of: scenePhase) { _, phase in
                 // Files may have been added in the Files app meanwhile.
-                if phase == .active { model.reload(library) }
+                if phase == .active { model.reload(library, recent: recent) }
             }
             .fileImporter(isPresented: $model.isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 importFiles(result)
@@ -138,37 +177,64 @@ public struct FolderContent: View {
 
     private var list: some View {
         List(selection: $model.selection) {
-            ForEach(model.rows) { row in
-                FileRow(
-                    item: row.item,
-                    depth: row.depth,
-                    disclosure: showsDisclosure && row.item.isDirectory
-                        ? (model.expanded.contains(row.id), {
-                            // Animated so the children slide in and out under the folder, as in Files.
-                            withAnimation(.snappy(duration: 0.3)) { model.toggleExpanded(row.item, library: library) }
-                        })
-                        : nil,
-                    reservesDisclosureColumn: showsDisclosure
-                )
-                .tag(row.id)
-                .swipeActions {
-                    // The destructive role removes the row at once, which matches: the file
-                    // goes immediately too.
-                    Button("Delete", systemImage: "trash", role: .destructive) {
-                        model.delete([row.item], library: library, recent: recent)
+            ForEach(model.sections, id: \.title) { section in
+                if let title = section.title {
+                    Section {
+                        rows(section.rows)
+                    } header: {
+                        Text(title)
+                            .font(fonts.font(.indicator, .subheadline))
+                            .foregroundStyle(.secondary)
                     }
+                } else {
+                    rows(section.rows)
                 }
             }
         }
         .listStyle(.plain)
+        // Recent's day headers: the page header already sits above the list, and the default
+        // top margin doubled the gap between its subtitle and the first day.
+        .contentMargins(.top, model.listsRecent ? 0 : nil, for: .scrollContent)
+        .environment(\.defaultMinListHeaderHeight, 24)
         .contextMenu(forSelectionType: FileItem.ID.self) { ids in
-            FileMenu(items: model.items(ids), model: model, folder: folderURL, service: service)
+            FileMenu(items: model.items(ids), model: model, folder: compressFolder, service: service)
         } primaryAction: { ids in
             guard !model.isSelecting, ids.count == 1, let item = model.items(ids).first else { return }
             model.selection = []
             model.open(item)
         }
-        .fileActions(model: model, folder: folderURL)
+        .fileActions(model: model, folder: compressFolder)
+    }
+
+    private func rows(_ rows: [FolderRow]) -> some View {
+        ForEach(rows) { row in
+            FileRow(
+                item: row.item,
+                detail: row.detail,
+                depth: row.depth,
+                disclosure: showsDisclosure && row.item.isDirectory
+                    ? (model.expanded.contains(row.id), {
+                        // Animated so the children slide in and out under the folder, as in Files.
+                        withAnimation(.snappy(duration: 0.3)) {
+                            model.toggleExpanded(row.item, library: library, recent: recent)
+                        }
+                    })
+                    : nil,
+                reservesDisclosureColumn: showsDisclosure
+            )
+            .tag(row.id)
+            .swipeActions {
+                // The destructive role removes the row at once, which matches: both take
+                // effect immediately.
+                if let extra = model.extraSelectionAction, model.offersExtraAction(for: [row.item]) {
+                    Button(extra.title, systemImage: extra.systemImage, role: .destructive) { extra.perform([row.item]) }
+                        .tint(.gray)
+                }
+                Button("Delete", systemImage: "trash", role: .destructive) {
+                    model.delete([row.item], library: library, recent: recent)
+                }
+            }
+        }
     }
 
     // MARK: Actions
@@ -185,7 +251,9 @@ public struct FolderContent: View {
     private func createFolder() {
         defer { newName = "" }
         do {
-            try library.createFolder(named: newName, in: folderURL)
+            let created = try library.createFolder(named: newName, in: folderURL)
+            // Otherwise it wouldn't show up in Recent, where it was made.
+            if model.listsRecent { recent.record(library.relativePath(of: created), .created) }
         } catch {
             model.actions.alert = AlertContent(title: "Can't create the folder", message: error.localizedDescription)
         }
@@ -236,7 +304,7 @@ private struct FileActions: ViewModifier {
             }
             .alert("Extracted", isPresented: Binding(get: { model.actions.extracted != nil }, set: { if !$0 { model.actions.extracted = nil } })) {
                 Button("Show Folder") {
-                    if let folder = model.actions.extracted { model.open(folder: folder) }
+                    if let folder = model.actions.extracted { model.pushed = .extracted(folder, listedIn: listedFolder) }
                     model.actions.extracted = nil
                 }
                 Button("OK", role: .cancel) {}
@@ -244,14 +312,14 @@ private struct FileActions: ViewModifier {
                 Text("The files are in “\(model.actions.extracted?.lastPathComponent ?? "")”.")
             }
             .navigationDestination(item: $model.pushed) { route in
-                switch route {
-                case .folder(let url): FolderView(folder: url)
-                case .archive(let url): ArchiveView(url: url)
-                }
+                LibraryDestination(route, listedIn: listedFolder) { model.pushed = $0 }
             }
             .quickLookPreview($model.previewURL)
             .archiveActions(model.actions)
     }
+
+    /// The folder this list shows; `nil` for Recent.
+    private var listedFolder: URL? { model.listsRecent ? nil : (model.folder ?? library.root) }
 
     private func rename() {
         guard let item = model.renaming else { return }
@@ -328,7 +396,7 @@ private struct EditModeFromSelection: ViewModifier {
     }
 }
 
-/// Icon (or thumbnail), name, and size or date. In Browse, folders get a chevron that
+/// Icon (or thumbnail), name, and size or date. In file lists, folders get a chevron that
 /// expands them inline, and rows under expanded folders are indented.
 public struct FileRow: View {
     let item: FileItem
@@ -336,8 +404,8 @@ public struct FileRow: View {
     var depth: Int
     /// (is expanded, toggle) for folders that can expand inline.
     var disclosure: (Bool, () -> Void)?
-    /// Keep the chevron's column for every row (Browse), so file icons line up with folder
-    /// icons, as in Files. Lists without chevrons (Recent, Search) leave it out.
+    /// Keep the chevron's column for every row, so file icons line up with folder icons, as in
+    /// Files. Lists without chevrons (Search) leave it out.
     var reservesDisclosureColumn: Bool
     @Environment(\.fontTheme) private var fonts
 

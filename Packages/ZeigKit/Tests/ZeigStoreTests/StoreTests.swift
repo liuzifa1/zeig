@@ -166,6 +166,17 @@ import ZeigCore
         RecentStore(fileURL: file).record("x.7z", .created)
         #expect(RecentStore(fileURL: file).entries.map(\.relativePath) == ["x.7z"])
     }
+
+    @Test func dayGroups() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 3, day: 11, hour: 12))!
+        let hour: TimeInterval = 3600
+        #expect(RecentDay.title(for: now - hour, now: now, calendar: calendar) == "Today")
+        #expect(RecentDay.title(for: now - 13 * hour, now: now, calendar: calendar) == "Yesterday")
+        #expect(RecentDay.title(for: now - 3 * 24 * hour, now: now, calendar: calendar) == "This Week")
+        #expect(RecentDay.title(for: now - 9 * 24 * hour, now: now, calendar: calendar) == "Earlier")
+    }
 }
 
 @MainActor
@@ -187,5 +198,51 @@ import ZeigCore
         #expect(reloaded.rarsEnabled)
         #expect(reloaded.defaultLevel == .maximum)
         #expect(reloaded.advanced(for: .sevenZip) == ["7z.method": "PPMd"])
+    }
+}
+
+@Suite struct StorageReportTests {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("zeig-storage-\(UUID().uuidString)")
+
+    private func write(_ path: String, bytes: Int) throws {
+        let url = root.appendingPathComponent(path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(count: bytes).write(to: url)
+    }
+
+    @Test func sortsBytesByKindAndFindsExtractedArchives() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try write("photos.zip", bytes: 100)
+        try write("photos/a.jpg", bytes: 300)
+        try write("photos/inner.7z", bytes: 50)    // inside an extracted folder: counts as extracted
+        try write("Work/report.tar.gz", bytes: 40)
+        try write("Work/report 2/r.txt", bytes: 7) // numbered extraction folder
+        try write("Work/report 2b/x.txt", bytes: 1) // not an extraction name
+        try write("photos 3/b.jpg", bytes: 3)      // extracted again: same archive, second folder
+        try write("notes.txt", bytes: 10)
+        try write(".hidden", bytes: 1000)          // skipped, as in the lists
+
+        let report = StorageReport.scan(root)
+        #expect(report.total == 511)
+        #expect(report.size(of: .archives) == 140)
+        #expect(report.size(of: .extracted) == 360)
+        #expect(report.size(of: .other) == 11)
+        #expect(StorageReport.Kind.allCases.reduce(UInt64(0)) { $0 + report.size(of: $1) } == report.total)
+
+        #expect(report.extracted.map(\.archive.relativePath) == ["photos.zip", "Work/report.tar.gz"])
+        #expect(report.extracted.map { $0.folders.map(\.relativePath) } == [["photos", "photos 3"], ["Work/report 2"]])
+        #expect(report.extracted.first?.foldersSize == 353)
+
+        #expect(report.largestFiles.first?.relativePath == "photos/a.jpg")
+        #expect(report.largestFiles.count == 8)
+        #expect(StorageReport.scan(root, largestLimit: 2).largestFiles.map(\.size) == [300, 100])
+    }
+
+    @Test func extractionNames() {
+        #expect(StorageReport.isExtractionName("Photos", stem: "photos"))
+        #expect(StorageReport.isExtractionName("photos 12", stem: "photos"))
+        #expect(!StorageReport.isExtractionName("photos ", stem: "photos"))
+        #expect(!StorageReport.isExtractionName("photos2", stem: "photos"))
+        #expect(!StorageReport.isExtractionName("photos old", stem: "photos"))
     }
 }

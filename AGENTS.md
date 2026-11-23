@@ -36,11 +36,11 @@ CARGO_TARGET_DIR=~/Library/Caches/Zeig/native/cargo cargo test --manifest-path N
 | `ZeigCore` | `ArchiveFormat`, `FormatDetector`, `BackendRouter` + `BackendCapabilities` (the routing rule), `ArchiveBackend` protocol, `ArchiveEntry`, `ArchiveContents`/`ArchiveInfo`/`ArchiveStatistics`, `ArchiveError`, `PackRequest`, `FormatOptions` (advanced settings), `GuideTopic` (explanations), `ArchiveTree`, `FileNaming`, `ZeigLog` (developer console log), `NativeOutputCapture`, `PictureInPictureState` | Foundation |
 | `ZeigBackends` | `SevenZipBackend`, `LibArchiveBackend`, `RarsBackend`, `ArchiveService` (routing, fallback, background work, rars check) | ZeigCore, CSevenZip, CLibArchive, ZeigRars |
 | `ZeigRars` | UniFFI's **generated** Swift for rars. Never edit; run `build-rars.sh`. | ZeigRarsFFI |
-| `ZeigStore` | `AppSettings`, `FileLibrary` (the app folder), `RecentStore` | ZeigCore |
+| `ZeigStore` | `AppSettings`, `FileLibrary` (the app folder), `RecentStore`, `RecentDay`, `StorageReport` (Settings › Storage) | ZeigCore |
 | `ZeigDesign` | `PageHeader`, glass helpers (from HNReader), `ScopeSwitcher`, `LargeTitleItem`, `FileIcon`, `FileThumbnail`, `ExperimentalBadge`, `OperationModel`/`OperationOverlay`, `FontTheme` (Font Lab roles), `ConsoleView` + `ConsolePictureInPicture` (developer console), `hidesTabBar`, `showSettings`/`showConsole` | ZeigCore |
-| `ArchiveFeature` | Screens every tab pushes: `FolderModel`/`FolderContent`/`FolderView` (Files-style list), `fileActions` (shared by every file list), `FileMenu`, `SelectionToolbar`/`SelectionHeader`, `FileInfoSheet`, `FilePasteboard`, `ArchiveView`, `PackSheet`, guide views, `ArchiveActions`, `LibraryRoute` | ZeigCore, ZeigBackends, ZeigStore, ZeigDesign |
+| `ArchiveFeature` | Screens every tab pushes: `FolderModel`/`FolderContent`/`FolderView` (Files-style list), `fileActions` (shared by every file list), `FileMenu`, `SelectionToolbar`/`SelectionHeader`, `FileInfoSheet`, `FilePasteboard`, `ArchiveView`, `PackSheet`, guide views, `ArchiveActions`, `LibraryRoute`/`LibraryDestination` (every push, and Open Extracted) | ZeigCore, ZeigBackends, ZeigStore, ZeigDesign |
 | `BrowseFeature` / `RecentFeature` / `SearchFeature` | One tab each | the above + ArchiveFeature |
-| `SettingsFeature` | Settings sheet, Backends, Developer (console, Font Lab), About / Privacy / Open Source | the above + ArchiveFeature |
+| `SettingsFeature` | Settings sheet, Storage, Backends, Developer (console, Font Lab), About (with the icon easter egg) / Privacy / Open Source | the above + ArchiveFeature |
 | `App/` | Entry point, tabs, "Open in Zeig" | everything |
 | `CSevenZip`, `CLibArchive`, `ZeigRarsFFI` | Binary targets built by `Native/scripts` | — |
 
@@ -141,6 +141,11 @@ it, and a `differences(…)` message so failures say what differs.
   needs `UIBackgroundModes: audio` in `project.yml`.
 - The app icon is `App/App.icon` (Icon Composer). XcodeGen 2.44 doesn't know `.icon` and would add
   its PNGs as loose files, so `project.yml` declares it under `options.fileTypes` as one file.
+  `App/AppSplash.icon` is an alternate icon (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`). The
+  Simulator changes it but fails to show iOS's confirmation alert, reports an error, and may then
+  refuse to change it back: check icon switching on a device.
+- The app's name is "Zeig!" (`CFBundleDisplayName`, `AppInfo.displayName`); the target, modules and
+  bundle ID stay `Zeig`. Text the user reads says "Zeig!".
 - Sizes in archive headers are untrusted and can be anything: sum them with
   `addingSaturating`, never `+` (two huge ones trap and crash the app on opening).
 - `fileMover` and friends set `isPresented` to false *before* their completion handler runs. Don't
@@ -149,6 +154,14 @@ it, and a `differences(…)` message so failures say what differs.
 - Hide the tab bar with `hidesTabBar(_:)` (UIKit), never `.toolbar(.hidden, for: .tabBar)`, which
   breaks the Search tab's field on 26+. `.bottomBar` toolbars don't exist on macOS, where the
   package builds for tests: keep them behind `#if os(iOS)`.
+- The app resizes: iPad windows, and the iPhone Duo, whose narrow outer screen and wide inner one
+  swap when it folds (the "iPhone Duo" simulator; its hinge is set with the simulator tools).
+  Folding must keep each tab where it was, so never put the `TabView` or a `NavigationStack`
+  behind an `if` on the size class: the branch change rebuilds them and drops the navigation.
+  Choose layouts by the size class inside screens, and keep `AdaptiveTabStyle` on the device type.
+  On the Duo the status bar sits in a column at the side, so the top has no safe area:
+  `PageHeader` adds room there itself (`VerticalBarTopMargin`). A custom bar of your own needs
+  the same, or it touches the screen's top edge.
 
 ## Don't
 
